@@ -1,0 +1,9 @@
+torch
+transformers
+accelerate
+bitsandbytes
+scipy
+pandas
+matplotlib
+statsmodels
+sentencepiece
