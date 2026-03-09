@@ -6,3 +6,5 @@ __pycache__/
 # Don't ignore the results, but ignore local model weights if you download them
 models/
 quantitative/results/*.csv
+
+.streamlit/secrets.toml
