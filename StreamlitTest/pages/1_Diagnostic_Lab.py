@@ -64,7 +64,9 @@ with col_chat:
                 steps_generator = get_assistant_response(
                     st.session_state.model_mode, 
                     user_query, 
-                    st.session_state.doc_content
+                    st.session_state.doc_content,
+                    st.session_state.gemini_model,
+                    st.session_state.mercury_client
                 )
                 status_placeholder = st.empty()
                 final_text = ""

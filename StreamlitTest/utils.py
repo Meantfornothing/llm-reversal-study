@@ -53,34 +53,29 @@ def stream_gemini(prompt):
         if chunk.text:
             yield chunk.text
 
-# StreamlitTest/utils.py
 
-def run_mercury_diffusion(prompt):
+def run_mercury_diffusion(prompt, client):
     """
-    Actual Mercury 2 Diffusion Call.
-    We iterate through a few 'samples' to show the user the refinement.
+    Calls Mercury 2 and yields intermediate 'denoising' steps.
+    Each step represents the model's current global understanding of the audit.
     """
-    # Initialize the client (OpenAI-compatible)
-    client = init_models()[1] 
-    
-    # Define the steps you want to show the participant
-    # This simulates the 'clearing up' of the text
-    display_steps = ["Initial Noise Reduction...", "Structural Alignment...", "Logic Synthesis...", "Final Polish"]
-    
-    # 1. Yield the visual status updates first
-    for step_msg in display_steps:
-        yield step_msg
-
-    # 2. Perform the actual high-fidelity diffusion call
-    # Mercury 2 handles the complex 'refinement' in one high-speed parallel pass
-    response = client.chat.completions.create(
+    # 1. We perform a 'Low Effort' pass to get the 'Sketch'
+    sketch_res = client.chat.completions.create(
         model="mercury-2",
         messages=[{"role": "user", "content": prompt}],
-        extra_body={"reasoning_effort": "high"} # Triggers the deep diffusion process
+        extra_body={"reasoning_effort": "instant"} # Fastest, lowest fidelity
     )
-    
-    # 3. Yield the final result to replace the 'analyzing' text
-    yield response.choices[0].message.content
+    sketch_text = sketch_res.choices[0].message.content
+    yield sketch_text
+
+    # 2. We perform the 'Refinement' pass
+    # This simulates the parallel 'diffusion' process where text is corrected globally
+    final_res = client.chat.completions.create(
+        model="mercury-2",
+        messages=[{"role": "user", "content": prompt}],
+        extra_body={"reasoning_effort": "high"} # Deepest diffusion reasoning
+    )
+    yield final_res.choices[0].message.content
 
 def check_api_configs():
     """Verify that secrets are loaded before starting the task."""
@@ -89,14 +84,16 @@ def check_api_configs():
         st.error("⚠️ API Keys missing! Check your .streamlit/secrets.toml file.")
     return keys_found
 
-def get_assistant_response(model_mode, user_query, current_doc):
+
+def get_assistant_response(model_mode, user_query, current_doc, gemini_model, mercury_client):
     """
-    Logic to route the prompt to the correct model.
-    Passes the 'current_doc' as the system context.
+    Updated to accept model objects from the session state.
     """
     full_context = f"CURRENT DOCUMENT CONTENT:\n{current_doc}\n\nUSER REQUEST: {user_query}"
     
     if model_mode == "Autoregressive (Gemini)":
-        return stream_gemini(full_context)
+        # Pass the model to the stream function
+        return stream_gemini(full_context, gemini_model)
     else:
-        return run_mercury_diffusion(full_context)
+        # Pass the client to the diffusion function
+        return run_mercury_diffusion(full_context, mercury_client)
