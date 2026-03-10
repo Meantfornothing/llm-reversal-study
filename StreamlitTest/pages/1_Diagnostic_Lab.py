@@ -1,17 +1,21 @@
 import streamlit as st
 import time
-from utils import get_assistant_response, run_mercury_diffusion
+from utils import stream_gemini, run_mercury_diffusion, get_assistant_response
 
-# --- PAGE CONFIG ---
-st.set_page_config(layout="wide", page_title="Step 1: Diagnostic Lab")
-
-# --- INITIALIZE SESSION STATE ---
+# --- 1. SESSION STATE INITIALIZATION (Top of File) ---
+if "is_running" not in st.session_state:
+    st.session_state.is_running = False
+if "start_time" not in st.session_state:
+    st.session_state.start_time = None
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "doc_content" not in st.session_state:
     st.session_state.doc_content = "The AI will generate the diagnostic report here..."
 if "model_mode" not in st.session_state:
     st.session_state.model_mode = "Autoregressive (Gemini)"
+
+# --- PAGE CONFIG ---
+st.set_page_config(layout="wide", page_title="Step 1: Diagnostic Lab")
 
 # --- SIDEBAR CONTROLS ---
 with st.sidebar:
@@ -31,63 +35,54 @@ col_chat, col_editor = st.columns([1, 1.2], gap="large")
 with col_chat:
     st.subheader("💬 AI Research Assistant")
     
-    # Display chat history
+    # 2. CHAT CONTAINER
     chat_container = st.container(height=500, border=True)
     for message in st.session_state.messages:
         with chat_container.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Chat Input Logic
+    # 3. CHAT INPUT & INTERRUPTIBLE LOOP
     if user_query := st.chat_input("Ask the AI to analyze the document..."):
-        # 1. Add user message to state and UI
+        st.session_state.is_running = True
+        st.session_state.start_time = time.time()
         st.session_state.messages.append({"role": "user", "content": user_query})
+        
         with chat_container.chat_message("user"):
             st.markdown(user_query)
 
-        # 2. Get response from utils
         with chat_container.chat_message("assistant"):
-            if st.session_state.model_mode == "Autoregressive (Gemini)":
-    # FIX: Add the two missing model arguments here
-                response_generator = get_assistant_response(
-                    st.session_state.model_mode, 
-                    user_query, 
-                    st.session_state.doc_content,
-                    st.session_state.gemini_model,   # Missing arg 1
-                    st.session_state.mercury_client  # Missing arg 2
-                )
+            placeholder = st.empty()
+            
+            # Fetch the generator (Governed in utils.py)
+            response_generator = get_assistant_response(
+                st.session_state.model_mode, 
+                user_query, 
+                st.session_state.doc_content,
+                st.session_state.gemini_model,   # Initialized in StreamlitExp.py
+                st.session_state.mercury_client  # Initialized in StreamlitExp.py
+            )
+            
+            full_response = ""
+            for update in response_generator:
+                # BREAK CONDITION: Check if is_running was flipped by an interrupt button
+                if not st.session_state.is_running:
+                    break 
                 
-                # st.write_stream iterates through the generator yielded by utils
-                full_response = st.write_stream(response_generator)
-                st.session_state.messages.append({"role": "assistant", "content": full_response})
-            else:
-                # 1. Get the generator from Mercury
-                steps_generator = run_mercury_diffusion(
-                    user_query, 
-                    st.session_state.mercury_client
-                )
-                
-                placeholder = st.empty()
-                
-                # 2. Iterate through the actual diffusion efforts
-                for step in steps_generator:
-                    # Update state so the 'Interrupt' button can log the current text
-                    st.session_state.current_output = step["content"]
-                    
+                if st.session_state.model_mode == "Autoregressive (Gemini)":
+                    full_response = update # Accumulated text from stream_gemini
+                    placeholder.markdown(full_response)
+                else:
+                    # update is a dict: {"effort": ..., "content": ...}
+                    full_response = update["content"]
                     with placeholder.container():
-                        st.info(f"🧬 Mercury 2 Refinement: **{step['effort'].upper()}**")
-                        # You can add a CSS blur here to simulate 'noise' clearing up
-                        st.markdown(step["content"])
-                
-                # 3. Save final result to history
-                st.session_state.messages.append({
-                    "role": "assistant", 
-                    "content": st.session_state.current_output
-                })
+                        st.info(f"🧬 Mercury 2 Refinement: **{update['effort'].upper()}**")
+                        st.markdown(full_response)
+            
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
+            st.session_state.is_running = False
 
 with col_editor:
     st.subheader("📝 Diagnostic Editor")
-    
-    # The Editor Interface
     st.session_state.doc_content = st.text_area(
         label="Edit the report to fix errors:",
         value=st.session_state.doc_content,
@@ -95,15 +90,17 @@ with col_editor:
         key="editor_area"
     )
     
-    # Action Buttons
+    # ACTION & INTERRUPT BUTTONS
     c1, c2 = st.columns(2)
     with c1:
         if st.button("🔄 Sync Assistant to Editor", use_container_width=True):
-            # Takes the last message from the AI and puts it in the editor
             if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
                 st.session_state.doc_content = st.session_state.messages[-1]["content"]
                 st.rerun()
     
     with c2:
+        # This button serves as the main 'Interrupt' measurement
         if st.button("🚨 Log Diagnostic Error", use_container_width=True, type="primary"):
-            st.toast("Error timestamp logged!", icon="✅")
+            st.session_state.is_running = False # Stops the loop in col_chat
+            elapsed = time.time() - (st.session_state.start_time or time.time())
+            st.toast(f"Error caught at {elapsed:.2f}s!", icon="✅")
