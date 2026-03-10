@@ -150,5 +150,4 @@ if submit:
     except Exception as e:
         st.error(f"Error saving data: {e}")
 
-        #streamlit run /Users/elisalu/llm-reversal-study/StreamlitTest/pages/2_Debrief_Survey.py
 
