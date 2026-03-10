@@ -20,25 +20,25 @@ with st.form("unified_study_form"):
         ar_natural = st.select_slider(
             "How natural did the 'Typewriter' style feel for diagnostic work?",
             options=["Very Unnatural", "Unnatural", "Neutral", "Natural", "Very Natural"],
-            value="Neutral",
+            value="Very Unnatural",
             key="ar_nat"
         )
         
         ar_wait = st.select_slider(
             "Did you feel you had to 'wait' for the AI to finish a sentence before you could think?",
             options=["Always Waiting", "Often", "Neutral", "Rarely", "Never (Read while typing)"],
-            value="Neutral",
+            value="Always Waiting",
             key="ar_wait"
         )
 
         st.markdown("**ARLLM Cognitive Workload (NASA-TLX)**")
         col1, col2 = st.columns(2)
         with col1:
-            ar_mental = st.slider("Mental Demand (Tracking the cursor)", 1, 10, 5, key="ar_m")
-            ar_temp = st.slider("Temporal Demand (Speed of typing)", 1, 10, 5, key="ar_t")
+            ar_mental = st.slider("Mental Demand (Tracking the cursor)", 1, 10, 1, key="ar_m")
+            ar_temp = st.slider("Temporal Demand (Speed of typing)", 1, 10, 1, key="ar_t")
         with col2:
-            ar_frust = st.slider("Frustration (Waiting for output)", 1, 10, 5, key="ar_f")
-            ar_perf = st.slider("Success in finding traps with AR", 1, 10, 5, key="ar_p")
+            ar_frust = st.slider("Frustration (Waiting for output)", 1, 10, 1, key="ar_f")
+            ar_perf = st.slider("Success in finding traps with AR", 1, 10, 1, key="ar_p")
 
         st.subheader("Qualitative Load (ARLLM)")
         ar_qual_notes = st.text_area(
@@ -55,25 +55,25 @@ with st.form("unified_study_form"):
         dllm_natural = st.select_slider(
             "How natural did the 'Denoising' (Global-to-Local) style feel?",
             options=["Very Unnatural", "Unnatural", "Neutral", "Natural", "Very Natural"],
-            value="Neutral",
+            value="Very Unnatural",
             key="dl_nat"
         )
         
         dllm_stability = st.select_slider(
             "Did the text 'changing globally' make you feel disoriented?",
             options=["Very Disoriented", "Somewhat", "Neutral", "Stable enough", "Very Stable"],
-            value="Neutral",
+            value="Very Disoriented",
             key="dl_stab"
         )
 
         st.markdown("**DLLM Cognitive Workload (NASA-TLX)**")
         col3, col4 = st.columns(2)
         with col3:
-            dllm_mental = st.slider("Mental Demand (Interpreting the blur/refinement)", 1, 10, 5, key="dl_m")
-            dllm_temp = st.slider("Temporal Demand (Speed of the 'clearing up')", 1, 10, 5, key="dl_t")
+            dllm_mental = st.slider("Mental Demand (Interpreting the blur/refinement)", 1, 10, 1, key="dl_m")
+            dllm_temp = st.slider("Temporal Demand (Speed of the 'clearing up')", 1, 10, 1, key="dl_t")
         with col4:
-            dllm_frust = st.slider("Frustration (Text changing under your eyes)", 1, 10, 5, key="dl_f")
-            dllm_perf = st.slider("Success in finding traps with DLLM", 1, 10, 5, key="dl_p")
+            dllm_frust = st.slider("Frustration (Text changing under your eyes)", 1, 10, 1, key="dl_f")
+            dllm_perf = st.slider("Success in finding traps with DLLM", 1, 10, 1, key="dl_p")
 
         st.subheader("Qualitative Load (DLLM)")
         dl_qual_notes = st.text_area(
@@ -149,3 +149,5 @@ if submit:
         st.balloons()
     except Exception as e:
         st.error(f"Error saving data: {e}")
+
+        #streamlit run /Users/elisalu/llm-reversal-study/StreamlitTest/pages/2_Debrief_Survey.py
