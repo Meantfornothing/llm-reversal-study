@@ -34,7 +34,7 @@ with st.form("unified_study_form"):
         st.markdown("**ARLLM Cognitive Workload (NASA-TLX)**")
         col1, col2 = st.columns(2)
         with col1:
-            ar_mental = st.slider("Mental Demand (Tracking the cursor)", 1, 10, 1, key="ar_m")
+            ar_mental = st.slider("Mental Demand (Tracking the sequence)", 1, 10, 1, key="ar_m")
             ar_temp = st.slider("Temporal Demand (Speed of typing)", 1, 10, 1, key="ar_t")
         with col2:
             ar_frust = st.slider("Frustration (Waiting for output)", 1, 10, 1, key="ar_f")
@@ -151,3 +151,4 @@ if submit:
         st.error(f"Error saving data: {e}")
 
         #streamlit run /Users/elisalu/llm-reversal-study/StreamlitTest/pages/2_Debrief_Survey.py
+
