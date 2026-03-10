@@ -1,6 +1,6 @@
 import streamlit as st
 import time
-from utils import get_assistant_response
+from utils import get_assistant_response, run_mercury_diffusion
 
 # --- PAGE CONFIG ---
 st.set_page_config(layout="wide", page_title="Step 1: Diagnostic Lab")
@@ -47,40 +47,42 @@ with col_chat:
         # 2. Get response from utils
         with chat_container.chat_message("assistant"):
             if st.session_state.model_mode == "Autoregressive (Gemini)":
-                # Handle streaming response
+    # FIX: Add the two missing model arguments here
                 response_generator = get_assistant_response(
                     st.session_state.model_mode, 
                     user_query, 
-                    st.session_state.doc_content
-                )
-                # st.write_stream automatically iterates and displays the text
-                full_response = st.write_stream(response_generator)
-        
-            # Save the clean text to history, not the object
-                st.session_state.messages.append({"role": "assistant", "content": full_response})
-            
-            else:
-                # Handle Mercury 2 diffusion steps
-                steps_generator = get_assistant_response(
-                    st.session_state.model_mode, 
-                    user_query, 
                     st.session_state.doc_content,
-                    st.session_state.gemini_model,
+                    st.session_state.gemini_model,   # Missing arg 1
+                    st.session_state.mercury_client  # Missing arg 2
+                )
+                
+                # st.write_stream iterates through the generator yielded by utils
+                full_response = st.write_stream(response_generator)
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
+            else:
+                # 1. Get the generator from Mercury
+                steps_generator = run_mercury_diffusion(
+                    user_query, 
                     st.session_state.mercury_client
                 )
-                status_placeholder = st.empty()
-                final_text = ""
                 
-                for step_content in steps_generator:
-                    # Check if it's a status message or the final long report
-                    if len(step_content) < 50: 
-                        status_placeholder.info(f"🧬 Mercury Diffusion: {step_content}")
-                        time.sleep(0.5) 
-                    else:
-                        final_text = step_content
-                        status_placeholder.markdown(final_text)
+                placeholder = st.empty()
                 
-                st.session_state.messages.append({"role": "assistant", "content": final_text})
+                # 2. Iterate through the actual diffusion efforts
+                for step in steps_generator:
+                    # Update state so the 'Interrupt' button can log the current text
+                    st.session_state.current_output = step["content"]
+                    
+                    with placeholder.container():
+                        st.info(f"🧬 Mercury 2 Refinement: **{step['effort'].upper()}**")
+                        # You can add a CSS blur here to simulate 'noise' clearing up
+                        st.markdown(step["content"])
+                
+                # 3. Save final result to history
+                st.session_state.messages.append({
+                    "role": "assistant", 
+                    "content": st.session_state.current_output
+                })
 
 with col_editor:
     st.subheader("📝 Diagnostic Editor")

@@ -41,14 +41,9 @@ def init_models():
     
     return gemini_model, mercury_client
 
-def stream_gemini(prompt):
-    # Ensure you are using the correct model ID we found earlier
-    model = genai.GenerativeModel('gemini-3-flash-preview')
-    
-    # This returns an iterable of GenerateContentResponse objects
+def stream_gemini(prompt, model):
+    """Yields text chunks for the AR 'Typewriter' effect."""
     response = model.generate_content(prompt, stream=True)
-    
-    # We yield just the text chunks so Streamlit can render them directly
     for chunk in response:
         if chunk.text:
             yield chunk.text
@@ -56,26 +51,27 @@ def stream_gemini(prompt):
 
 def run_mercury_diffusion(prompt, client):
     """
-    Calls Mercury 2 and yields intermediate 'denoising' steps.
-    Each step represents the model's current global understanding of the audit.
+    Simulates the 'Diffusion' process by requesting 3 distinct 
+    levels of reasoning effort from Mercury 2.
     """
-    # 1. We perform a 'Low Effort' pass to get the 'Sketch'
-    sketch_res = client.chat.completions.create(
-        model="mercury-2",
-        messages=[{"role": "user", "content": prompt}],
-        extra_body={"reasoning_effort": "instant"} # Fastest, lowest fidelity
-    )
-    sketch_text = sketch_res.choices[0].message.content
-    yield sketch_text
-
-    # 2. We perform the 'Refinement' pass
-    # This simulates the parallel 'diffusion' process where text is corrected globally
-    final_res = client.chat.completions.create(
-        model="mercury-2",
-        messages=[{"role": "user", "content": prompt}],
-        extra_body={"reasoning_effort": "high"} # Deepest diffusion reasoning
-    )
-    yield final_res.choices[0].message.content
+    # 2026 Mercury 2 supports: "instant", "low", "medium", "high"
+    efforts = ["instant", "low", "medium", "high"]
+    
+    for effort in efforts:
+        # Each call here is a 'refinement pass'
+        response = client.chat.completions.create(
+            model="mercury-2",
+            messages=[{"role": "user", "content": prompt}],
+            extra_body={"reasoning_effort": effort}
+        )
+        
+        # Yield the current 'state' of the thought
+        content = response.choices[0].message.content
+        yield {"effort": effort, "content": content}
+        
+        # Artificial delay so the participant has time to 'audit'
+        # Adjust this time (e.g., 2.0) to make it even slower
+        time.sleep(1.5)
 
 def check_api_configs():
     """Verify that secrets are loaded before starting the task."""
@@ -87,13 +83,13 @@ def check_api_configs():
 
 def get_assistant_response(model_mode, user_query, current_doc, gemini_model, mercury_client):
     """
-    Updated to accept model objects from the session state.
+    Routes the request to the correct model logic.
     """
     full_context = f"CURRENT DOCUMENT CONTENT:\n{current_doc}\n\nUSER REQUEST: {user_query}"
     
     if model_mode == "Autoregressive (Gemini)":
-        # Pass the model to the stream function
+        # Returns a generator yielding text chunks
         return stream_gemini(full_context, gemini_model)
     else:
-        # Pass the client to the diffusion function
+        # Returns a generator yielding effort-level dictionaries
         return run_mercury_diffusion(full_context, mercury_client)
