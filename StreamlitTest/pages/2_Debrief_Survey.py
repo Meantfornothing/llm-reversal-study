@@ -11,14 +11,14 @@ st.info("Please evaluate your experience with the two different AI generation st
 with st.form("unified_study_form"):
     
     # Create two tabs for the specific models
-    tab_ar, tab_dllm = st.tabs(["⚡ Model 1 (Sequential/Gemini)", "🌊 Model 2 (Diffusion/Mercury)"])
+    tab_ar, tab_dllm = st.tabs(["⚡ Model 1", "🌊 Model 2"])
 
     # --- TAB 1: ARLLM ---
     with tab_ar:
-        st.subheader("Model 1 Experience (Token-by-Token)")
+        st.subheader("Model 1 Experience")
         
         ar_natural = st.select_slider(
-            "How natural did the 'Typewriter' style feel for problem identification in text?",
+            "How natural did the 'Typewriter' style feel for error identification in text (Model 1)?",
             options=["Very Unnatural", "Unnatural", "Neutral", "Natural", "Very Natural"],
             value="Very Unnatural",
             key="ar_nat"
@@ -31,14 +31,14 @@ with st.form("unified_study_form"):
             key="ar_wait"
         )
 
-        st.markdown("** Cognitive Workload (NASA-TLX)**")
+        st.markdown("**Model 1 Cognitive Workload (NASA-TLX)**")
         col1, col2 = st.columns(2)
         with col1:
             ar_mental = st.slider("Mental Demand (Tracking the sequence)", 1, 10, 1, key="ar_m")
             ar_temp = st.slider("Temporal Demand (Speed of the output)", 1, 10, 1, key="ar_t")
         with col2:
             ar_frust = st.slider("Frustration (Waiting for output)", 1, 10, 1, key="ar_f")
-            ar_perf = st.slider("Success in finding traps with AR", 1, 10, 1, key="ar_p")
+            ar_perf = st.slider("Success in finding traps with Model 1", 1, 10, 1, key="ar_p")
             ar_effort = st.slider("Effort (How much mental effort was required?)", 1, 10, 1, key="ar_e")
 
         st.subheader("Qualitative Load (Model 1)")
@@ -59,10 +59,10 @@ with st.form("unified_study_form"):
 
     # --- TAB 2: DLLM ---
     with tab_dllm:
-        st.subheader("Model 2 Experience (Iterative Refinement)")
+        st.subheader("Model 2 Experience")
         
         dllm_natural = st.select_slider(
-            "How natural did the 'Denoising' (Global-to-Local) style feel?",
+            "How natural did the 'Typewriter' style feel for error identification in text (Model 2)?",
             options=["Very Unnatural", "Unnatural", "Neutral", "Natural", "Very Natural"],
             value="Very Unnatural",
             key="dl_nat"
@@ -82,7 +82,7 @@ with st.form("unified_study_form"):
             dllm_temp = st.slider("Temporal Demand (Speed of the 'clearing up')", 1, 10, 1, key="dl_t")
         with col4:
             dllm_frust = st.slider("Frustration (Text changing under your eyes)", 1, 10, 1, key="dl_f")
-            dllm_perf = st.slider("Success in finding traps with DLLM", 1, 10, 1, key="dl_p")
+            dllm_perf = st.slider("Success in finding traps with Model 2", 1, 10, 1, key="dl_p")
             # FIX: Changed key from 'ar_e' to 'dl_e'
             dllm_effort = st.slider("Effort (How much mental effort was required?)", 1, 10, 1, key="dl_e")
 
@@ -110,7 +110,7 @@ with st.form("unified_study_form"):
     with col_pref:
         preference = st.radio(
             "Which LLM felt more like a 'Collaborative Partner'?",
-            ["Model 1 (Sequential)", "Model 2 (Diffusion)", "No Difference"],
+            ["Model 1", "Model 2", "No Difference"],
             key="pref_radio"
         )
     with col_agency:
@@ -120,7 +120,7 @@ with st.form("unified_study_form"):
             key="agency_radio"
         )
 
-    why_text = st.text_area("Describe the 'Why' behind your preference:", height=100, key="why_notes")
+    why_text = st.text_area("Describe the 'Why' behind your model preference:", height=100, key="why_notes")
 
     # THE ONLY SUBMIT BUTTON
     submit = st.form_submit_button("Submit Final Study Data")
