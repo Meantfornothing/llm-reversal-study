@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import os
-from datetime import datetime
 
 st.set_page_config(layout="wide", page_title="Step 2: LLM Evaluation")
 
@@ -12,14 +11,14 @@ st.info("Please evaluate your experience with the two different AI generation st
 with st.form("unified_study_form"):
     
     # Create two tabs for the specific models
-    tab_ar, tab_dllm = st.tabs(["⚡ ARLLM (Sequential/Gemini)", "🌊 DLLM (Diffusion/Mercury)"])
+    tab_ar, tab_dllm = st.tabs(["⚡ Model 1", "🌊 Model 2"])
 
     # --- TAB 1: ARLLM ---
     with tab_ar:
-        st.subheader("Autoregressive Experience (Token-by-Token)")
+        st.subheader("Model 1 Experience")
         
         ar_natural = st.select_slider(
-            "How natural did the 'Typewriter' style feel for diagnostic work?",
+            "How natural did the 'Typewriter' style feel for error identification in text (Model 1)?",
             options=["Very Unnatural", "Unnatural", "Neutral", "Natural", "Very Natural"],
             value="Very Unnatural",
             key="ar_nat"
@@ -32,30 +31,39 @@ with st.form("unified_study_form"):
             key="ar_wait"
         )
 
-        st.markdown("**ARLLM Cognitive Workload (NASA-TLX)**")
+        st.markdown("**Model 1 Cognitive Workload (NASA-TLX)**")
         col1, col2 = st.columns(2)
         with col1:
             ar_mental = st.slider("Mental Demand (Tracking the sequence)", 1, 10, 1, key="ar_m")
-            ar_temp = st.slider("Temporal Demand (Speed of typing)", 1, 10, 1, key="ar_t")
+            ar_temp = st.slider("Temporal Demand (Speed of the output)", 1, 10, 1, key="ar_t")
         with col2:
             ar_frust = st.slider("Frustration (Waiting for output)", 1, 10, 1, key="ar_f")
-            ar_perf = st.slider("Success in finding traps with AR", 1, 10, 1, key="ar_p")
+            ar_perf = st.slider("Success in finding traps with Model 1", 1, 10, 1, key="ar_p")
+            ar_effort = st.slider("Effort (How much mental effort was required?)", 1, 10, 1, key="ar_e")
 
-        st.subheader("Qualitative Load (ARLLM)")
+        st.subheader("Qualitative Load (Model 1)")
         ar_qual_notes = st.text_area(
-            "Describe specific moments where the ARLLM felt 'heavy' or confusing:",
+            "Describe specific moments where the Model 1 felt 'heavy' or confusing:",
             placeholder="e.g. The typewriter pace was too slow/fast...",
-            key="ar_qual",
+            key="ar_qual_text",
+            height=100
+        )
+
+        st.subheader("Qualitative support (Model 1)")
+        ar_understand_notes = st.text_area(
+            "Describe how you felt the AI supported your understanding of the text",
+            placeholder="e.g. The AI gave concrete details ...",
+            key="ar_understand_text",
             height=100
         )
         
 
     # --- TAB 2: DLLM ---
     with tab_dllm:
-        st.subheader("Diffusion Experience (Iterative Refinement)")
+        st.subheader("Model 2 Experience")
         
         dllm_natural = st.select_slider(
-            "How natural did the 'Denoising' (Global-to-Local) style feel?",
+            "How natural did the 'Typewriter' style feel for error identification in text (Model 2)?",
             options=["Very Unnatural", "Unnatural", "Neutral", "Natural", "Very Natural"],
             value="Very Unnatural",
             key="dl_nat"
@@ -68,20 +76,29 @@ with st.form("unified_study_form"):
             key="dl_stab"
         )
 
-        st.markdown("**DLLM Cognitive Workload (NASA-TLX)**")
+        st.markdown("**Model 2 Cognitive Workload (NASA-TLX)**")
         col3, col4 = st.columns(2)
         with col3:
             dllm_mental = st.slider("Mental Demand (Interpreting the blur/refinement)", 1, 10, 1, key="dl_m")
             dllm_temp = st.slider("Temporal Demand (Speed of the 'clearing up')", 1, 10, 1, key="dl_t")
         with col4:
             dllm_frust = st.slider("Frustration (Text changing under your eyes)", 1, 10, 1, key="dl_f")
-            dllm_perf = st.slider("Success in finding traps with DLLM", 1, 10, 1, key="dl_p")
+            dllm_perf = st.slider("Success in finding traps with Model 2", 1, 10, 1, key="dl_p")
+            # FIX: Changed key from 'ar_e' to 'dl_e'
+            dllm_effort = st.slider("Effort (How much mental effort was required?)", 1, 10, 1, key="dl_e")
 
-        st.subheader("Qualitative Load (DLLM)")
+        st.subheader("Qualitative Load (Model 2)")
         dl_qual_notes = st.text_area(
-            "Describe specific moments where the DLLM felt 'heavy' or confusing:",
+            "Describe specific moments where the Model 2 felt 'heavy' or confusing:",
             placeholder="e.g. The global changes made me lose my place...",
-            key="dl_qual",
+            key="dl_qual_text",
+            height=100
+        )
+        st.subheader("Qualitative support (Model 2)")
+        dl_understand_notes = st.text_area(
+            "Describe how you felt the AI supported your understanding of the text",
+            placeholder="e.g. The AI gave concrete details ...",
+            key="dl_understand_text",
             height=100
         )
 
@@ -99,15 +116,17 @@ with st.form("unified_study_form"):
     with col_pref:
         preference = st.radio(
             "Which LLM felt more like a 'Collaborative Partner'?",
-            ["ARLLM (Sequential)", "DLLM (Diffusion)", "No Difference"]
+            ["Model 1", "Model 2", "No Difference"],
+            key="pref_radio"
         )
     with col_agency:
         agency_score = st.radio(
             "In which model did you feel MORE in control of the document?",
-            ["ARLLM", "DLLM", "Both equal"]
+            ["Model 1", "Model 2", "Both equal"],
+            key="agency_radio"
         )
 
-    why_text = st.text_area("Describe the 'Why' behind your preference:", height=100)
+    why_text = st.text_area("Describe the 'Why' behind your model preference:", height=100, key="why_notes")
 
     # THE ONLY SUBMIT BUTTON
     submit = st.form_submit_button("Submit Final Study Data")
@@ -121,8 +140,8 @@ if submit:
         st.session_state.p_id = "WITHDRAWN"
     else:
         # 1. Calculate TLX Averages
-        ar_tlx = (ar_mental + ar_temp + ar_frust + ar_perf) / 4
-        dl_tlx = (dllm_mental + dllm_temp + dllm_frust + dllm_perf) / 4
+        ar_tlx = (ar_mental + ar_temp + ar_frust + ar_perf) / 5
+        dl_tlx = (dllm_mental + dllm_temp + dllm_frust + dllm_perf) / 5
         
         # 2. Extract Interrupt Logs (System messages) from Diagnostic Lab
         interrupts = [m['content'] for m in st.session_state.get("messages", []) if m['role'] == 'system']
@@ -138,10 +157,10 @@ if submit:
             "agency_choice": agency_score,
             "ar_total_tlx": ar_tlx,
             "dl_total_tlx": dl_tlx,
-            "ar_mental": ar_mental, "ar_temp": ar_temp, "ar_frust": ar_frust, "ar_perf": ar_perf,
-            "ar_natural": ar_natural, "ar_wait": ar_wait, "ar_qual_notes": ar_qual_notes,
-            "dl_mental": dllm_mental, "dl_temp": dllm_temp, "dl_frust": dllm_frust, "dl_perf": dllm_perf,
-            "dl_natural": dllm_natural, "dl_stability": dllm_stability, "dl_qual_notes": dl_qual_notes,
+            "ar_mental": ar_mental, "ar_temp": ar_temp, "ar_frust": ar_frust, "ar_perf": ar_perf,"ar_effort": ar_effort,
+            "ar_natural": ar_natural, "ar_wait": ar_wait, "ar_qual_notes": ar_qual_notes, "ar_understand_notes": ar_understand_notes, 
+            "dl_mental": dllm_mental, "dl_temp": dllm_temp, "dl_frust": dllm_frust, "dl_perf": dllm_perf,"dl_effort": dllm_effort, 
+            "dl_natural": dllm_natural, "dl_stability": dllm_stability, "dl_qual_notes": dl_qual_notes,"dl_understand_notes": dl_understand_notes,
             "overall_why": why_text
         }
         
@@ -158,3 +177,19 @@ if submit:
             st.info("The researcher will now take the laptop back. Thank you!")
         except Exception as e:
             st.error(f"Error saving data: {e}")
+
+    
+    try:
+        # Create a directory if it doesn't exist
+        os.makedirs("quantitative/results", exist_ok=True)
+        csv_path = "quantitative/results/survey_data.csv"
+        
+        df = pd.DataFrame([data])
+        
+        # Append to CSV
+        df.to_csv(csv_path, mode='a', header=not os.path.exists(csv_path), index=False)
+        
+        st.success(f"Success! Workloads Logged -> AR: {ar_tlx:.2f} | DLLM: {dl_tlx:.2f}")
+        st.balloons()
+    except Exception as e:
+        st.error(f"Error saving data: {e}")
