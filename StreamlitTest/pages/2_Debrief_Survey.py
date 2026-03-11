@@ -48,6 +48,7 @@ with st.form("unified_study_form"):
             key="ar_qual",
             height=100
         )
+        
 
     # --- TAB 2: DLLM ---
     with tab_dllm:
@@ -85,6 +86,11 @@ with st.form("unified_study_form"):
         )
 
     st.divider()
+    st.subheader("Final Consent Confirmation")
+    st.write("By submitting, you agree to let your anonymized data be used for this study.")
+    consent_final = st.radio("Do you still consent to your data being used?", ["Yes, I consent", "No, I wish to withdraw and delete my session"])
+    
+    submit = st.form_submit_button("Complete Study")
 
     # --- FINAL COMPARISON & AGENCY ---
     st.subheader("3. Comparative Analysis & Agency")
@@ -108,52 +114,47 @@ with st.form("unified_study_form"):
 
 # --- DATA LOGGING ---
 if submit:
-    # Calculate Raw TLX for both
-    ar_tlx = (ar_mental + ar_temp + ar_frust + ar_perf) / 4
-    dl_tlx = (dllm_mental + dllm_temp + dllm_frust + dllm_perf) / 4
-    
-    # 2. Extract Interrupt Logs from the session state
-    # We filter the chat messages for 'system' messages containing our interrupt data
-    interrupts = [m['content'] for m in st.session_state.get("messages", []) if m['role'] == 'system']
-    # Unified results dictionary containing ALL data
-    data = {
-        "p_id": st.session_state.get("p_id", "N/A"),
-        "laptop_id": st.session_state.get("laptop_id", "N/A"), # From Researcher Setup
-        "initial_model": st.session_state.get("initial_model_choice", "N/A"), # Fixed ordering
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "interrupt_logs": " | ".join(interrupts), # Combine all interrupts into one cell
-        "pref_choice": preference,
-        "agency_choice": agency_score,
-        "ar_total_tlx": ar_tlx,
-        "dl_total_tlx": dl_tlx,
-        "ar_mental": ar_mental,
-        "ar_temp": ar_temp,
-        "ar_frust": ar_frust,
-        "ar_perf": ar_perf,
-        "ar_natural": ar_natural,
-        "ar_wait": ar_wait,
-        "ar_qual_notes": ar_qual_notes,
-        "dl_mental": dllm_mental,
-        "dl_temp": dllm_temp,
-        "dl_frust": dllm_frust,
-        "dl_perf": dllm_perf,
-        "dl_natural": dllm_natural,
-        "dl_stability": dllm_stability,
-        "dl_qual_notes": dl_qual_notes,
-        "overall_why": why_text
-    }
-    
-    try:
-        df = pd.DataFrame([data])
-        # Use a unique filename for each participant to prevent data loss
-        p_id = st.session_state.get("p_id", "unknown")
-        csv_path = f"quantitative/results/participant_{p_id}.csv"
+    if "No" in consent_final:
+        st.error("⚠️ You have withdrawn. No data has been saved. You may now close this window.")
+        # Clear sensitive session data immediately for participant privacy
+        st.session_state.messages = []
+        st.session_state.p_id = "WITHDRAWN"
+    else:
+        # 1. Calculate TLX Averages
+        ar_tlx = (ar_mental + ar_temp + ar_frust + ar_perf) / 4
+        dl_tlx = (dllm_mental + dllm_temp + dllm_frust + dllm_perf) / 4
         
-        os.makedirs(os.path.dirname(csv_path), exist_ok=True)
-        df.to_csv(csv_path, index=False)
+        # 2. Extract Interrupt Logs (System messages) from Diagnostic Lab
+        interrupts = [m['content'] for m in st.session_state.get("messages", []) if m['role'] == 'system']
         
-        st.success(f"Trial Data Saved for Participant {p_id}!")
-        st.balloons()
-    except Exception as e:
-        st.error(f"Error saving data: {e}")
-
+        # 3. Compile Unified Data Dictionary
+        data = {
+            "p_id": st.session_state.get("p_id", "N/A"),
+            "laptop_id": st.session_state.get("laptop_id", "N/A"),
+            "initial_model": st.session_state.get("initial_model_choice", "N/A"),
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "interrupt_logs": " | ".join(interrupts),
+            "pref_choice": preference,
+            "agency_choice": agency_score,
+            "ar_total_tlx": ar_tlx,
+            "dl_total_tlx": dl_tlx,
+            "ar_mental": ar_mental, "ar_temp": ar_temp, "ar_frust": ar_frust, "ar_perf": ar_perf,
+            "ar_natural": ar_natural, "ar_wait": ar_wait, "ar_qual_notes": ar_qual_notes,
+            "dl_mental": dllm_mental, "dl_temp": dllm_temp, "dl_frust": dllm_frust, "dl_perf": dllm_perf,
+            "dl_natural": dllm_natural, "dl_stability": dllm_stability, "dl_qual_notes": dl_qual_notes,
+            "overall_why": why_text
+        }
+        
+        try:
+            df = pd.DataFrame([data])
+            p_id = st.session_state.get("p_id", "unknown")
+            csv_path = f"quantitative/results/participant_{p_id}.csv"
+            
+            os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+            df.to_csv(csv_path, index=False)
+            
+            st.success(f"Trial Data Successfully Saved for Participant {p_id}!")
+            st.balloons()
+            st.info("The researcher will now take the laptop back. Thank you!")
+        except Exception as e:
+            st.error(f"Error saving data: {e}")

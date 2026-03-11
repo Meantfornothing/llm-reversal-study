@@ -13,6 +13,8 @@ if "doc_content" not in st.session_state:
     st.session_state.doc_content = "The AI will generate the diagnostic report here..."
 if "model_mode" not in st.session_state:
     st.session_state.model_mode = "Autoregressive (Gemini)"
+if "last_synced_content" not in st.session_state:
+    st.session_state.last_synced_content = ""
 
 # --- PAGE CONFIG ---
 # Add this to the top of 1_Diagnostic_Lab.py and 2_Debrief_Survey.py
@@ -26,20 +28,33 @@ st.set_page_config(
 # Inside StreamlitTest/pages/1_Diagnostic_Lab.py
 
 # Replace the sidebar radio button with this logic:
+# StreamlitTest/pages/1_Diagnostic_Lab.py
+
+# Initialize error counts if not present
+if "errors_found" not in st.session_state:
+    st.session_state.errors_found = 0
+
 with st.sidebar:
-    st.header("Session Info")
-    st.write(f"Participant: **{st.session_state.get('p_id', 'N/A')}**")
+    st.header("Task Progress")
+    # Just a visual display now - no button here!
+    st.write(f"Errors Corrected: {st.session_state.errors_found} / 3")
+    st.progress(st.session_state.errors_found / 3)
     
-    # Generic labeling for the participant
-    display_name = "Assistant Alpha" if "Autoregressive" in st.session_state.model_mode else "Assistant Beta"
-    st.success(f"Connected to: **{display_name}**")
+    st.divider()
     
-    # Hide the 'Clear Chat' and other technical buttons behind an expander if needed
-    with st.expander("Researcher Tools"):
-        if st.button("Force Clear"):
-            st.session_state.messages = []
-            st.rerun()
-            
+    # Transition Logic: Only pops up when they've used the Editor button 3 times
+    if st.session_state.errors_found >= 3:
+        st.success("Target Reached: 3 Errors Found & Fixed!")
+        
+        # Check if we need to swap to the second model or go to the survey
+        if "SWAPPED" not in [m['content'] for m in st.session_state.messages if m['role'] == 'system']:
+            if st.button("➡️ Start Next Task (Second Assistant)", use_container_width=True):
+                # Swap logic...
+                st.rerun()
+        else:
+            if st.button("🏁 Finish & Go to Survey", use_container_width=True, type="primary"):
+                st.switch_page("pages/2_Debrief_Survey.py")
+
 # --- DUAL-PANE LAYOUT ---
 col_chat, col_editor = st.columns([1, 1.2], gap="large")
 
@@ -52,45 +67,58 @@ with col_chat:
         with chat_container.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # 3. CHAT INPUT & INTERRUPTIBLE LOOP
-    if user_query := st.chat_input("Ask the AI to analyze the document..."):
-        st.session_state.is_running = True
-        st.session_state.start_time = time.time()
-        st.session_state.messages.append({"role": "user", "content": user_query})
-        
-        with chat_container.chat_message("user"):
-            st.markdown(user_query)
+# 3. CHAT INPUT & INTERRUPTIBLE LOOP
+if user_query := st.chat_input("Ask the AI to analyze the document..."):
+    st.session_state.is_running = True
+    st.session_state.start_time = time.time() # This is the start of the whole process
+    st.session_state.messages.append({"role": "user", "content": user_query})
+    
+    with chat_container.chat_message("user"):
+        st.markdown(user_query)
 
-        with chat_container.chat_message("assistant"):
+    with chat_container.chat_message("assistant"):
+        # UI Bridge: Immediate visual feedback while the API prepares
+        with st.status("Initializing model...", expanded=False) as status:
             placeholder = st.empty()
             
-            # Fetch the generator (Governed in utils.py)
             response_generator = get_assistant_response(
                 st.session_state.model_mode, 
                 user_query, 
                 st.session_state.doc_content,
-                st.session_state.gemini_model,   # Initialized in StreamlitExp.py
-                st.session_state.mercury_client  # Initialized in StreamlitExp.py
+                st.session_state.gemini_model,
+                st.session_state.mercury_client
             )
             
             full_response = ""
+            first_token_received = False
+
             for update in response_generator:
-                # BREAK CONDITION: Check if is_running was flipped by an interrupt button
                 if not st.session_state.is_running:
                     break 
                 
+                # Capture TTFT (Time to First Token)
+                if not first_token_received:
+                    ttft = time.time() - st.session_state.start_time
+                    st.session_state.messages.append({
+                        "role": "system", 
+                        "content": f"METRIC: TTFT {ttft:.2f}s"
+                    })
+                    status.update(label="Assistant Generating...", state="running")
+                    first_token_received = True
+
                 if st.session_state.model_mode == "Autoregressive (Gemini)":
-                    full_response = update # Accumulated text from stream_gemini
+                    full_response = update 
                     placeholder.markdown(full_response)
                 else:
-                    # update is a dict: {"effort": ..., "content": ...}
                     full_response = update["content"]
                     with placeholder.container():
-                        st.info(f"🧬 Mercury 2 Refinement: **{update['effort'].upper()}**")
+                        st.info(f"🧬 Assistant Beta Refinement: **{update['effort'].upper()}**")
                         st.markdown(full_response)
             
-            st.session_state.messages.append({"role": "assistant", "content": full_response})
-            st.session_state.is_running = False
+            status.update(label="Response Complete", state="complete")
+        
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
+        st.session_state.is_running = False
 
 with col_editor:
     st.subheader("📝 Diagnostic Editor")
@@ -109,7 +137,23 @@ with col_editor:
                 st.session_state.doc_content = st.session_state.messages[-1]["content"]
                 st.rerun()
     
-    # StreamlitTest/pages/1_Diagnostic_Lab.py
+# Logic to check if they've actually changed anything since the last AI sync
+    has_changed = st.session_state.doc_content.strip() != st.session_state.last_synced_content.strip()
+
+# This is the ONLY button that should increment the count
+    if st.button("✅ I have fixed an error", use_container_width=True, disabled=not has_changed):
+        st.session_state.errors_found += 1
+        st.session_state.last_synced_content = st.session_state.doc_content
+        
+        # Log the progress for your final data analysis
+        st.session_state.messages.append({
+            "role": "system", 
+            "content": f"PROGRESS: Error {st.session_state.errors_found} logged."
+        })
+        st.rerun()
+
+    if not has_changed:
+        st.caption("⚠️ Edit the text in the editor above to enable error logging.")
 
 with c2:
     if st.button("🚨 Log Diagnostic Error", use_container_width=True, type="primary"):

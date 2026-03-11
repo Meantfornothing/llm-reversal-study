@@ -43,18 +43,25 @@ def init_models():
 # StreamlitTest/utils.py
 
 def get_assistant_response(model_mode, user_query, current_doc, gemini_model, mercury_client):
-    """
-    Routes the request to the correct model logic and provides 
-    the generator needed for the interruptible UI loop.
-    """
-    # Contextualize the prompt with the current state of the diagnostic editor
-    full_context = f"CURRENT DOCUMENT CONTENT:\n{current_doc}\n\nUSER REQUEST: {user_query}"
+    # 1. Get the last 3 messages only (to keep it fast)
+    recent_history = st.session_state.messages[-3:] if len(st.session_state.messages) > 3 else st.session_state.messages
     
-    if model_mode == "Autoregressive (Gemini)":
-        # Returns the word-by-word governed generator
+    # 2. Format history for the prompt
+    history_str = ""
+    for m in recent_history:
+        history_str += f"{m['role'].upper()}: {m['content']}\n"
+
+    # 3. Combine into a compact prompt
+    full_context = (
+        f"SYSTEM: You are a diagnostic auditor. Audit the document below.\n"
+        f"DOCUMENT:\n{current_doc}\n\n"
+        f"RECENT CHAT:\n{history_str}\n"
+        f"NEW REQUEST: {user_query}"
+    )
+    
+    if "Autoregressive" in model_mode:
         return stream_gemini(full_context, gemini_model)
     else:
-        # Returns the step-by-step refinement generator
         return run_mercury_diffusion(full_context, mercury_client)
 
 # --- THE GOVERNOR CONFIG ---

@@ -18,14 +18,34 @@ st.title("Welcome to the AI Collaboration Study")
 # 1. CONSENT SECTION
 with st.expander("📝 Participant Consent & Information", expanded=True):
     st.write("Please read the following information carefully:")
-    st.info("""
-    - **Goal:** You will collaborate with an AI to identify errors in text.
-    - **Your Task:** Use the chat to analyze text and the editor to fix it.
-    - **Privacy:** All data is anonymized via your Participant ID.
-    """)
+    st.info("- Data is anonymized. You may withdraw at the end.")
     agreed = st.checkbox("I have read the info and agree to participate.")
 
+# --- SILENT DUAL WARMUP ---
+if agreed and "apis_warmed" not in st.session_state:
+    with st.spinner("Initializing Assistant Connections..."):
+        try:
+            # Warm up Gemini (AR)
+            st.session_state.gemini_model.generate_content("Ping", generation_config={"max_output_tokens": 1})
+            
+            # Warm up Mercury (Diffusion)
+            st.session_state.mercury_client.chat.completions.create(
+                model="mercury-2",
+                messages=[{"role": "user", "content": "Ping"}],
+                extra_body={"reasoning_effort": "instant"},
+                max_tokens=1
+            )
+            st.session_state.apis_warmed = True
+            st.toast("Systems Online", icon="🛰️")
+        except Exception as e:
+            st.error(f"Connection Lag Detected: {e}")
+
 if agreed:
+    # --- 2. DEMOGRAPHICS SECTION ---
+    with st.container(border=True):
+        st.subheader("📊 Participant Profile")
+        # ... (Age, Gender, Field of Study code here) ...
+
     st.divider()
     st.subheader("🛠️ Interface Warmup (Practice Mode)")
     st.write("Use this space to get comfortable with the tools. This data is **NOT** recorded.")
@@ -92,5 +112,11 @@ if agreed:
             st.toast("Practice interrupt captured!")
 
     st.divider()
-    if st.button("🚀 I'm Ready - Start Real Experiment"):
-        st.switch_page("pages/1_Diagnostic_Lab.py")
+    
+    if st.session_state.get('field_study'):
+        if st.button("🚀 I'm Ready - Start Real Experiment"):
+            # Clean up warmup state so it doesn't bleed into the real experiment
+            st.session_state.messages = [] 
+            st.switch_page("pages/1_Diagnostic_Lab.py")
+    else:
+        st.caption("⚠️ Please fill in your Field of Study to enable the start button.")
