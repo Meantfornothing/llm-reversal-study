@@ -49,6 +49,14 @@ with st.form("unified_study_form"):
             height=100
         )
 
+        st.subheader("Qualitative support (Model 1)")
+        ar_understand_notes = st.text_area(
+            "Describe how you felt the AI supported your understanding of the text",
+            placeholder="e.g. The AI gave concrete details ...",
+            key="ar_understand_text",
+            height=100
+        )
+
     # --- TAB 2: DLLM ---
     with tab_dllm:
         st.subheader("Model 2 Experience (Iterative Refinement)")
@@ -83,6 +91,13 @@ with st.form("unified_study_form"):
             "Describe specific moments where the Model 2 felt 'heavy' or confusing:",
             placeholder="e.g. The global changes made me lose my place...",
             key="dl_qual_text",
+            height=100
+        )
+        st.subheader("Qualitative support (Model 2)")
+        dl_understand_notes = st.text_area(
+            "Describe how you felt the AI supported your understanding of the text",
+            placeholder="e.g. The AI gave concrete details ...",
+            key="dl_understand_text",
             height=100
         )
 
@@ -131,6 +146,7 @@ if submit:
         "ar_natural": ar_natural,
         "ar_wait": ar_wait,
         "ar_qual_notes": ar_qual_notes,
+        "ar_understand_notes": ar_understand_notes, 
         "dl_mental": dllm_mental,
         "dl_temp": dllm_temp,
         "dl_frust": dllm_frust,
@@ -139,6 +155,7 @@ if submit:
         "dl_natural": dllm_natural,
         "dl_stability": dllm_stability,
         "dl_qual_notes": dl_qual_notes,
+        "dl_understand_notes": dl_understand_notes,
         "overall_why": why_text
     }
     
