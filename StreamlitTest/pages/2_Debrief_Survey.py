@@ -45,7 +45,7 @@ with st.form("unified_study_form"):
         ar_qual_notes = st.text_area(
             "Describe specific moments where the ARLLM felt 'heavy' or confusing:",
             placeholder="e.g. The typewriter pace was too slow/fast...",
-            key="ar_qual",
+            key="ar_qual_text",
             height=100
         )
 
@@ -56,14 +56,14 @@ with st.form("unified_study_form"):
         dllm_natural = st.select_slider(
             "How natural did the 'Denoising' (Global-to-Local) style feel?",
             options=["Very Unnatural", "Unnatural", "Neutral", "Natural", "Very Natural"],
-            value="Very Unnatural",
+            value="Neutral",
             key="dl_nat"
         )
         
         dllm_stability = st.select_slider(
             "Did the text 'changing globally' make you feel disoriented?",
             options=["Very Disoriented", "Somewhat", "Neutral", "Stable enough", "Very Stable"],
-            value="Very Disoriented",
+            value="Neutral",
             key="dl_stab"
         )
 
@@ -75,13 +75,14 @@ with st.form("unified_study_form"):
         with col4:
             dllm_frust = st.slider("Frustration (Text changing under your eyes)", 1, 10, 1, key="dl_f")
             dllm_perf = st.slider("Success in finding traps with DLLM", 1, 10, 1, key="dl_p")
-            dllm_effort = st.slider("Effort (How much mental effort was required?)", 1, 10, 1, key="ar_e")
+            # FIX: Changed key from 'ar_e' to 'dl_e'
+            dllm_effort = st.slider("Effort (How much mental effort was required?)", 1, 10, 1, key="dl_e")
 
         st.subheader("Qualitative Load (DLLM)")
         dl_qual_notes = st.text_area(
             "Describe specific moments where the DLLM felt 'heavy' or confusing:",
             placeholder="e.g. The global changes made me lose my place...",
-            key="dl_qual",
+            key="dl_qual_text",
             height=100
         )
 
@@ -94,15 +95,17 @@ with st.form("unified_study_form"):
     with col_pref:
         preference = st.radio(
             "Which LLM felt more like a 'Collaborative Partner'?",
-            ["ARLLM (Sequential)", "DLLM (Diffusion)", "No Difference"]
+            ["ARLLM (Sequential)", "DLLM (Diffusion)", "No Difference"],
+            key="pref_radio"
         )
     with col_agency:
         agency_score = st.radio(
             "In which model did you feel MORE in control of the document?",
-            ["ARLLM", "DLLM", "Both equal"]
+            ["ARLLM", "DLLM", "Both equal"],
+            key="agency_radio"
         )
 
-    why_text = st.text_area("Describe the 'Why' behind your preference:", height=100)
+    why_text = st.text_area("Describe the 'Why' behind your preference:", height=100, key="why_notes")
 
     # THE ONLY SUBMIT BUTTON
     submit = st.form_submit_button("Submit Final Study Data")
@@ -113,7 +116,7 @@ if submit:
     ar_tlx = (ar_mental + ar_temp + ar_frust + ar_perf + ar_effort) / 5
     dl_tlx = (dllm_mental + dllm_temp + dllm_frust + dllm_perf + dllm_effort) / 5
     
-    # Unified results dictionary containing ALL data
+    # Unified results dictionary
     data = {
         "p_id": st.session_state.get("p_id", "N/A"),
         "pref_choice": preference,
@@ -132,7 +135,7 @@ if submit:
         "dl_temp": dllm_temp,
         "dl_frust": dllm_frust,
         "dl_perf": dllm_perf,
-        "dl_effort:": dllm_effort,
+        "dl_effort": dllm_effort, 
         "dl_natural": dllm_natural,
         "dl_stability": dllm_stability,
         "dl_qual_notes": dl_qual_notes,
@@ -140,11 +143,11 @@ if submit:
     }
     
     try:
-        df = pd.DataFrame([data])
+        # Create a directory if it doesn't exist
+        os.makedirs("quantitative/results", exist_ok=True)
         csv_path = "quantitative/results/survey_data.csv"
         
-        # Ensure the directory exists
-        os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+        df = pd.DataFrame([data])
         
         # Append to CSV
         df.to_csv(csv_path, mode='a', header=not os.path.exists(csv_path), index=False)
@@ -153,5 +156,3 @@ if submit:
         st.balloons()
     except Exception as e:
         st.error(f"Error saving data: {e}")
-
-        #streamlit run /Users/elisalu/llm-reversal-study/StreamlitTest/pages/2_Debrief_Survey.py
