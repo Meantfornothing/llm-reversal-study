@@ -11,14 +11,14 @@ st.info("Please evaluate your experience with the two different AI generation st
 with st.form("unified_study_form"):
     
     # Create two tabs for the specific models
-    tab_ar, tab_dllm = st.tabs(["⚡ ARLLM (Sequential/Gemini)", "🌊 DLLM (Diffusion/Mercury)"])
+    tab_ar, tab_dllm = st.tabs(["⚡ Model 1 (Sequential/Gemini)", "🌊 Model 2 (Diffusion/Mercury)"])
 
     # --- TAB 1: ARLLM ---
     with tab_ar:
-        st.subheader("Autoregressive Experience (Token-by-Token)")
+        st.subheader("Model 1 Experience (Token-by-Token)")
         
         ar_natural = st.select_slider(
-            "How natural did the 'Typewriter' style feel for text revision?",
+            "How natural did the 'Typewriter' style feel for problem identification in text?",
             options=["Very Unnatural", "Unnatural", "Neutral", "Natural", "Very Natural"],
             value="Very Unnatural",
             key="ar_nat"
@@ -31,7 +31,7 @@ with st.form("unified_study_form"):
             key="ar_wait"
         )
 
-        st.markdown("**ARLLM Cognitive Workload (NASA-TLX)**")
+        st.markdown("** Cognitive Workload (NASA-TLX)**")
         col1, col2 = st.columns(2)
         with col1:
             ar_mental = st.slider("Mental Demand (Tracking the sequence)", 1, 10, 1, key="ar_m")
@@ -41,9 +41,9 @@ with st.form("unified_study_form"):
             ar_perf = st.slider("Success in finding traps with AR", 1, 10, 1, key="ar_p")
             ar_effort = st.slider("Effort (How much mental effort was required?)", 1, 10, 1, key="ar_e")
 
-        st.subheader("Qualitative Load (ARLLM)")
+        st.subheader("Qualitative Load (Model 1)")
         ar_qual_notes = st.text_area(
-            "Describe specific moments where the ARLLM felt 'heavy' or confusing:",
+            "Describe specific moments where the Model 1 felt 'heavy' or confusing:",
             placeholder="e.g. The typewriter pace was too slow/fast...",
             key="ar_qual_text",
             height=100
@@ -51,7 +51,7 @@ with st.form("unified_study_form"):
 
     # --- TAB 2: DLLM ---
     with tab_dllm:
-        st.subheader("Diffusion Experience (Iterative Refinement)")
+        st.subheader("Model 2 Experience (Iterative Refinement)")
         
         dllm_natural = st.select_slider(
             "How natural did the 'Denoising' (Global-to-Local) style feel?",
@@ -67,7 +67,7 @@ with st.form("unified_study_form"):
             key="dl_stab"
         )
 
-        st.markdown("**DLLM Cognitive Workload (NASA-TLX)**")
+        st.markdown("**Model 2 Cognitive Workload (NASA-TLX)**")
         col3, col4 = st.columns(2)
         with col3:
             dllm_mental = st.slider("Mental Demand (Interpreting the blur/refinement)", 1, 10, 1, key="dl_m")
@@ -78,9 +78,9 @@ with st.form("unified_study_form"):
             # FIX: Changed key from 'ar_e' to 'dl_e'
             dllm_effort = st.slider("Effort (How much mental effort was required?)", 1, 10, 1, key="dl_e")
 
-        st.subheader("Qualitative Load (DLLM)")
+        st.subheader("Qualitative Load (Model 2)")
         dl_qual_notes = st.text_area(
-            "Describe specific moments where the DLLM felt 'heavy' or confusing:",
+            "Describe specific moments where the Model 2 felt 'heavy' or confusing:",
             placeholder="e.g. The global changes made me lose my place...",
             key="dl_qual_text",
             height=100
@@ -95,13 +95,13 @@ with st.form("unified_study_form"):
     with col_pref:
         preference = st.radio(
             "Which LLM felt more like a 'Collaborative Partner'?",
-            ["ARLLM (Sequential)", "DLLM (Diffusion)", "No Difference"],
+            ["Model 1 (Sequential)", "Model 2 (Diffusion)", "No Difference"],
             key="pref_radio"
         )
     with col_agency:
         agency_score = st.radio(
             "In which model did you feel MORE in control of the document?",
-            ["ARLLM", "DLLM", "Both equal"],
+            ["Model 1", "Model 2", "Both equal"],
             key="agency_radio"
         )
 
