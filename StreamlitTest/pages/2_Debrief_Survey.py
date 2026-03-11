@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+from datetime import datetime
 
 st.set_page_config(layout="wide", page_title="Step 2: LLM Evaluation")
 
@@ -164,20 +165,6 @@ if submit:
             "overall_why": why_text
         }
         
-        try:
-            df = pd.DataFrame([data])
-            p_id = st.session_state.get("p_id", "unknown")
-            csv_path = f"quantitative/results/participant_{p_id}.csv"
-            
-            os.makedirs(os.path.dirname(csv_path), exist_ok=True)
-            df.to_csv(csv_path, index=False)
-            
-            st.success(f"Trial Data Successfully Saved for Participant {p_id}!")
-            st.balloons()
-            st.info("The researcher will now take the laptop back. Thank you!")
-        except Exception as e:
-            st.error(f"Error saving data: {e}")
-
     
     try:
         # Create a directory if it doesn't exist
