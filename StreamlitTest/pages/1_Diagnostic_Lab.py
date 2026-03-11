@@ -10,25 +10,24 @@ st.set_page_config(
 )
 
 # --- 1. SESSION STATE INITIALIZATION ---
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+if "doc_content" not in st.session_state:
+    st.session_state.doc_content = ""
+if "last_synced_content" not in st.session_state:
+    st.session_state.last_synced_content = ""
 if "errors_found" not in st.session_state:
     st.session_state.errors_found = 0
-if "is_running" not in st.session_state:
-    st.session_state.is_running = False
 
-# TOP OF 1_Diagnostic_Lab.py
-if "doc_content" not in st.session_state or st.session_state.doc_content == "":
-    with st.spinner("Loading Scenario..."):
-        from utils import load_scenario_text
-        text = load_scenario_text(1)
-        if "Error:" in text:
-            st.error(text)
-        else:
-            st.session_state.doc_content = text
-            st.session_state.last_synced_content = text # Baseline for the 'Fix' button
-            st.success("✅ Scenario Loaded Successfully") # Temporary debug message
-
+# --- 2. LOAD INITIAL TEXT IF EMPTY ---
+if st.session_state.doc_content == "":
+    loaded_text = load_scenario_text(1)
+    if "Error:" in loaded_text:
+        st.error(loaded_text)
+        # Provide a fallback so the app doesn't crash on line 159
+        st.session_state.doc_content = "FILE MISSING"
+        st.session_state.last_synced_content = "FILE MISSING"
+    else:
+        st.session_state.doc_content = loaded_text
+        st.session_state.last_synced_content = loaded_text
 # --- SIDEBAR CONTROLS ---
 # Inside StreamlitTest/pages/1_Diagnostic_Lab.py
 
