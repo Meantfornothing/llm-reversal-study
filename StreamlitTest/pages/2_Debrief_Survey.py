@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import os
-from datetime import datetime
 
 st.set_page_config(layout="wide", page_title="Step 2: LLM Evaluation")
 
@@ -19,7 +18,7 @@ with st.form("unified_study_form"):
         st.subheader("Autoregressive Experience (Token-by-Token)")
         
         ar_natural = st.select_slider(
-            "How natural did the 'Typewriter' style feel for diagnostic work?",
+            "How natural did the 'Typewriter' style feel for text revision?",
             options=["Very Unnatural", "Unnatural", "Neutral", "Natural", "Very Natural"],
             value="Very Unnatural",
             key="ar_nat"
@@ -36,10 +35,11 @@ with st.form("unified_study_form"):
         col1, col2 = st.columns(2)
         with col1:
             ar_mental = st.slider("Mental Demand (Tracking the sequence)", 1, 10, 1, key="ar_m")
-            ar_temp = st.slider("Temporal Demand (Speed of typing)", 1, 10, 1, key="ar_t")
+            ar_temp = st.slider("Temporal Demand (Speed of the output)", 1, 10, 1, key="ar_t")
         with col2:
             ar_frust = st.slider("Frustration (Waiting for output)", 1, 10, 1, key="ar_f")
             ar_perf = st.slider("Success in finding traps with AR", 1, 10, 1, key="ar_p")
+            ar_effort = st.slider("Effort (How much mental effort was required?)", 1, 10, 1, key="ar_e")
 
         st.subheader("Qualitative Load (ARLLM)")
         ar_qual_notes = st.text_area(
@@ -75,6 +75,7 @@ with st.form("unified_study_form"):
         with col4:
             dllm_frust = st.slider("Frustration (Text changing under your eyes)", 1, 10, 1, key="dl_f")
             dllm_perf = st.slider("Success in finding traps with DLLM", 1, 10, 1, key="dl_p")
+            dllm_effort = st.slider("Effort (How much mental effort was required?)", 1, 10, 1, key="ar_e")
 
         st.subheader("Qualitative Load (DLLM)")
         dl_qual_notes = st.text_area(
@@ -109,19 +110,12 @@ with st.form("unified_study_form"):
 # --- DATA LOGGING ---
 if submit:
     # Calculate Raw TLX for both
-    ar_tlx = (ar_mental + ar_temp + ar_frust + ar_perf) / 4
-    dl_tlx = (dllm_mental + dllm_temp + dllm_frust + dllm_perf) / 4
+    ar_tlx = (ar_mental + ar_temp + ar_frust + ar_perf + ar_effort) / 5
+    dl_tlx = (dllm_mental + dllm_temp + dllm_frust + dllm_perf + dllm_effort) / 5
     
-    # 2. Extract Interrupt Logs from the session state
-    # We filter the chat messages for 'system' messages containing our interrupt data
-    interrupts = [m['content'] for m in st.session_state.get("messages", []) if m['role'] == 'system']
     # Unified results dictionary containing ALL data
     data = {
         "p_id": st.session_state.get("p_id", "N/A"),
-        "laptop_id": st.session_state.get("laptop_id", "N/A"), # From Researcher Setup
-        "initial_model": st.session_state.get("initial_model_choice", "N/A"), # Fixed ordering
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "interrupt_logs": " | ".join(interrupts), # Combine all interrupts into one cell
         "pref_choice": preference,
         "agency_choice": agency_score,
         "ar_total_tlx": ar_tlx,
@@ -130,6 +124,7 @@ if submit:
         "ar_temp": ar_temp,
         "ar_frust": ar_frust,
         "ar_perf": ar_perf,
+        "ar_effort": ar_effort,
         "ar_natural": ar_natural,
         "ar_wait": ar_wait,
         "ar_qual_notes": ar_qual_notes,
@@ -137,6 +132,7 @@ if submit:
         "dl_temp": dllm_temp,
         "dl_frust": dllm_frust,
         "dl_perf": dllm_perf,
+        "dl_effort:": dllm_effort,
         "dl_natural": dllm_natural,
         "dl_stability": dllm_stability,
         "dl_qual_notes": dl_qual_notes,
@@ -145,15 +141,17 @@ if submit:
     
     try:
         df = pd.DataFrame([data])
-        # Use a unique filename for each participant to prevent data loss
-        p_id = st.session_state.get("p_id", "unknown")
-        csv_path = f"quantitative/results/participant_{p_id}.csv"
+        csv_path = "quantitative/results/survey_data.csv"
         
+        # Ensure the directory exists
         os.makedirs(os.path.dirname(csv_path), exist_ok=True)
-        df.to_csv(csv_path, index=False)
         
-        st.success(f"Trial Data Saved for Participant {p_id}!")
+        # Append to CSV
+        df.to_csv(csv_path, mode='a', header=not os.path.exists(csv_path), index=False)
+        
+        st.success(f"Success! Workloads Logged -> AR: {ar_tlx:.2f} | DLLM: {dl_tlx:.2f}")
         st.balloons()
     except Exception as e:
         st.error(f"Error saving data: {e}")
 
+        #streamlit run /Users/elisalu/llm-reversal-study/StreamlitTest/pages/2_Debrief_Survey.py
