@@ -56,14 +56,14 @@ with st.form("unified_study_form"):
         dllm_natural = st.select_slider(
             "How natural did the 'Denoising' (Global-to-Local) style feel?",
             options=["Very Unnatural", "Unnatural", "Neutral", "Natural", "Very Natural"],
-            value="Neutral",
+            value="Very Unnatural",
             key="dl_nat"
         )
         
         dllm_stability = st.select_slider(
             "Did the text 'changing globally' make you feel disoriented?",
             options=["Very Disoriented", "Somewhat", "Neutral", "Stable enough", "Very Stable"],
-            value="Neutral",
+            value="Very Disoriented",
             key="dl_stab"
         )
 
