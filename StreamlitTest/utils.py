@@ -43,27 +43,27 @@ def init_models():
 # StreamlitTest/utils.py
 
 def get_assistant_response(model_mode, user_query, current_doc, gemini_model, mercury_client):
-    # 1. Get the last 3 messages only (to keep it fast)
-    recent_history = st.session_state.messages[-3:] if len(st.session_state.messages) > 3 else st.session_state.messages
+    """
+    Routes the request to the correct model logic and provides 
+    the context needed for the audit.
+    """
+    # 1. PLACE IT HERE: Create the combined context
+    full_context = f"DOCUMENT TO AUDIT:\n{current_doc}\n\nUSER QUESTION: {user_query}"
     
-    # 2. Format history for the prompt
-    history_str = ""
-    for m in recent_history:
-        history_str += f"{m['role'].upper()}: {m['content']}\n"
+    # 2. Add some "Speed Slicing" (Last 2 chat messages for context)
+    # This prevents the 12s lag from getting worse as the chat grows
+    recent_history = st.session_state.messages[-2:] if len(st.session_state.messages) > 2 else []
+    history_str = "\n".join([f"{m['role']}: {m['content']}" for m in recent_history])
+    
+    # Final Prompt sent to the models
+    final_prompt = f"{full_context}\n\nRECENT HISTORY:\n{history_str}"
 
-    # 3. Combine into a compact prompt
-    full_context = (
-        f"SYSTEM: You are a diagnostic auditor. Audit the document below.\n"
-        f"DOCUMENT:\n{current_doc}\n\n"
-        f"RECENT CHAT:\n{history_str}\n"
-        f"NEW REQUEST: {user_query}"
-    )
-    
     if "Autoregressive" in model_mode:
-        return stream_gemini(full_context, gemini_model)
+        # Pass the combined prompt to the Gemini streamer
+        return stream_gemini(final_prompt, gemini_model)
     else:
-        return run_mercury_diffusion(full_context, mercury_client)
-
+        # Pass the combined prompt to the Mercury streamer
+        return run_mercury_diffusion(final_prompt, mercury_client)
 # --- THE GOVERNOR CONFIG ---
 WORDS_PER_SECOND = 4  # Standardized speed for ARLLM
 
@@ -101,3 +101,22 @@ def run_mercury_diffusion(prompt, client):
         content = response.choices[0].message.content
         yield {"effort": effort, "content": content}
         time.sleep(1.5) # Governor delay
+
+# StreamlitTest/utils.py
+
+# Inside utils.py
+
+def load_scenario_text(task_num):
+    """Loads the audit text from the data folder."""
+    # Use underscores to match renamed files
+    filename = "The_Aurora_7_Deep_Sea.txt" if task_num == 1 else "The_Emerald_Canopy_Urban.txt"
+    
+    # Use a relative path starting from the root of your repo
+    import os
+    file_path = os.path.join("data", "scenarios", filename)
+    
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return f"Error: Scenario file not found at {file_path}"

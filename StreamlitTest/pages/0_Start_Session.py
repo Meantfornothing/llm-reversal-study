@@ -41,10 +41,23 @@ if agreed and "apis_warmed" not in st.session_state:
             st.error(f"Connection Lag Detected: {e}")
 
 if agreed:
-    # --- 2. DEMOGRAPHICS SECTION ---
+# --- 2. DEMOGRAPHICS SECTION ---
     with st.container(border=True):
         st.subheader("📊 Participant Profile")
-        # ... (Age, Gender, Field of Study code here) ...
+        st.write("Please provide some basic information before we begin.")
+        
+        col_dem_1, col_dem_2 = st.columns(2)
+        with col_dem_1:
+            # We assign these directly to session_state keys
+            st.session_state.age = st.number_input("Age", min_value=18, max_value=100, value=20)
+            st.session_state.gender = st.selectbox("Gender", ["Female", "Male", "Non-binary", "Other", "Prefer not to say"])
+        
+        with col_dem_2:
+            st.session_state.field_study = st.text_input("Field of Study", placeholder="e.g., Biology, Engineering")
+            st.session_state.ai_familiarity = st.select_slider(
+                "AI Familiarity",
+                options=["Novice", "Occasional", "Frequent", "Expert"]
+            )
 
     st.divider()
     st.subheader("🛠️ Interface Warmup (Practice Mode)")

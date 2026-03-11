@@ -103,12 +103,6 @@ with st.form("unified_study_form"):
             height=100
         )
 
-    st.divider()
-    st.subheader("Final Consent Confirmation")
-    st.write("By submitting, you agree to let your anonymized data be used for this study.")
-    consent_final = st.radio("Do you still consent to your data being used?", ["Yes, I consent", "No, I wish to withdraw and delete my session"])
-    
-    submit = st.form_submit_button("Complete Study")
 
     # --- FINAL COMPARISON & AGENCY ---
     st.subheader("3. Comparative Analysis & Agency")
@@ -129,8 +123,13 @@ with st.form("unified_study_form"):
 
     why_text = st.text_area("Describe the 'Why' behind your model preference:", height=100, key="why_notes")
 
-    # THE ONLY SUBMIT BUTTON
-    submit = st.form_submit_button("Submit Final Study Data")
+    st.divider()
+    st.subheader("Final Consent Confirmation")
+    st.write("By submitting, you agree to let your anonymized data be used for this study.")
+    consent_final = st.radio("Do you still consent to your data being used?", ["Yes, I consent", "No, I wish to withdraw and delete my session"])
+    
+    submit = st.form_submit_button("Complete Study")
+
 
 # --- DATA LOGGING ---
 if submit:
@@ -143,54 +142,64 @@ if submit:
             st.session_state.messages = []
             st.session_state.p_id = "WITHDRAWN"
     else:
-            # 1. Calculate TLX Averages
+        # 1. Calculate TLX Averages
         ar_tlx = (ar_mental + ar_temp + ar_frust + (11 - ar_perf) + ar_effort) / 5
         dl_tlx = (dllm_mental + dllm_temp + dllm_frust + (11 - dllm_perf) + dllm_effort) / 5
         
-    # Unified results dictionary
-    data = {
-        "p_id": st.session_state.get("p_id", "N/A"),
-        "laptop_id": st.session_state.get("laptop_id", "N/A"),
-        "initial_model": st.session_state.get("initial_model_choice", "N/A"),
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "interrupt_logs": " | ".join(interrupts),
-        "pref_choice": preference,
-        "agency_choice": agency_score,
-        "ar_total_tlx": ar_tlx,
-        "dl_total_tlx": dl_tlx,
-        "ar_mental": ar_mental,
-        "ar_temp": ar_temp,
-        "ar_frust": ar_frust,
-        "ar_perf": ar_perf,
-        "ar_effort": ar_effort,
-        "ar_natural": ar_natural,
-        "ar_wait": ar_wait,
-        "ar_qual_notes": ar_qual_notes,
-        "ar_understand_notes": ar_understand_notes, 
-        "dl_mental": dllm_mental,
-        "dl_temp": dllm_temp,
-        "dl_frust": dllm_frust,
-        "dl_perf": dllm_perf,
-        "dl_effort": dllm_effort, 
-        "dl_natural": dllm_natural,
-        "dl_stability": dllm_stability,
-        "dl_qual_notes": dl_qual_notes,
-        "dl_understand_notes": dl_understand_notes,
-        "overall_why": why_text
-    }
-    
-    try:
-        # Create a directory if it doesn't exist
-        os.makedirs("quantitative/results", exist_ok=True)
-        csv_path = "quantitative/results/survey_data.csv"
+        # 2. DEFINE INTERRUPTS HERE (This fixes your error)
+        # We filter the chat messages for 'system' messages containing our diagnostic data
+        all_messages = st.session_state.get("messages", [])
+        interrupts = [m['content'] for m in all_messages if m.get('role') == 'system']
         
-        df = pd.DataFrame([data])
+        # Unified results dictionary
+        data = {
+            "p_id": st.session_state.get("p_id", "N/A"),
+            "laptop_id": st.session_state.get("laptop_id", "N/A"),
+            "initial_model": st.session_state.get("initial_model_choice", "N/A"),
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "interrupt_logs": " | ".join(interrupts) if interrupts else "No interrupts recorded",
+            "pref_choice": preference,
+            "agency_choice": agency_score,
+            "ar_total_tlx": ar_tlx,
+            "dl_total_tlx": dl_tlx,
+            "ar_mental": ar_mental,
+            "ar_temp": ar_temp,
+            "ar_frust": ar_frust,
+            "ar_perf": ar_perf,
+            "ar_effort": ar_effort,
+            "ar_natural": ar_natural,
+            "ar_wait": ar_wait,
+            "ar_qual_notes": ar_qual_notes,
+            "ar_understand_notes": ar_understand_notes, 
+            "dl_mental": dllm_mental,
+            "dl_temp": dllm_temp,
+            "dl_frust": dllm_frust,
+            "dl_perf": dllm_perf,
+            "dl_effort": dllm_effort, 
+            "dl_natural": dllm_natural,
+            "dl_stability": dllm_stability,
+            "dl_qual_notes": dl_qual_notes,
+            "dl_understand_notes": dl_understand_notes,
+            "overall_why": why_text
+        }
         
+        try:
+            # New centralized data path
+            output_dir = "data/results"
+            os.makedirs(output_dir, exist_ok=True)
+            csv_path = f"{output_dir}/survey_data.csv"
+            
+            df = pd.DataFrame([data])
+            
+            # Append to CSV (mode='a') so you have one master file for the whole study
         # Append to CSV
-        df.to_csv(csv_path, mode='a', header=not os.path.exists(csv_path), index=False)
-        
-        st.success(f"Success! Workloads Logged -> AR: {ar_tlx:.2f} | DLLM: {dl_tlx:.2f}")
-        st.balloons()
-    except Exception as e:
-        st.error(f"Error saving data: {e}")
+            df.to_csv(csv_path, mode='a', header=not os.path.exists(csv_path), index=False)
+            
+            st.success(f"✅ Data logged for Participant: {data['p_id']}")
+            st.info(f"Master file updated: {csv_path}")
+            
+            st.balloons()
+            st.info("The session is now complete. You may notify the researcher.")
+        except Exception as e:
+            st.error(f"Error saving data: {e}")
 

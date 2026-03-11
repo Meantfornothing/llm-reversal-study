@@ -1,28 +1,33 @@
 import streamlit as st
 import time
-from utils import stream_gemini, run_mercury_diffusion, get_assistant_response
+from utils import stream_gemini, run_mercury_diffusion, get_assistant_response,load_scenario_text
 
-# --- 1. SESSION STATE INITIALIZATION (Top of File) ---
-if "is_running" not in st.session_state:
-    st.session_state.is_running = False
-if "start_time" not in st.session_state:
-    st.session_state.start_time = None
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "doc_content" not in st.session_state:
-    st.session_state.doc_content = "The AI will generate the diagnostic report here..."
-if "model_mode" not in st.session_state:
-    st.session_state.model_mode = "Autoregressive (Gemini)"
-if "last_synced_content" not in st.session_state:
-    st.session_state.last_synced_content = ""
-
-# --- PAGE CONFIG ---
-# Add this to the top of 1_Diagnostic_Lab.py and 2_Debrief_Survey.py
+# --- 0. PAGE CONFIG (MUST BE FIRST) ---
 st.set_page_config(
     layout="wide", 
     page_title="Study Session", 
-    initial_sidebar_state="collapsed" # Hides the page list
+    initial_sidebar_state="collapsed"
 )
+
+# --- 1. SESSION STATE INITIALIZATION ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "errors_found" not in st.session_state:
+    st.session_state.errors_found = 0
+if "is_running" not in st.session_state:
+    st.session_state.is_running = False
+
+# TOP OF 1_Diagnostic_Lab.py
+if "doc_content" not in st.session_state or st.session_state.doc_content == "":
+    with st.spinner("Loading Scenario..."):
+        from utils import load_scenario_text
+        text = load_scenario_text(1)
+        if "Error:" in text:
+            st.error(text)
+        else:
+            st.session_state.doc_content = text
+            st.session_state.last_synced_content = text # Baseline for the 'Fix' button
+            st.success("✅ Scenario Loaded Successfully") # Temporary debug message
 
 # --- SIDEBAR CONTROLS ---
 # Inside StreamlitTest/pages/1_Diagnostic_Lab.py
@@ -36,22 +41,41 @@ if "errors_found" not in st.session_state:
 
 with st.sidebar:
     st.header("Task Progress")
-    # Just a visual display now - no button here!
     st.write(f"Errors Corrected: {st.session_state.errors_found} / 3")
-    st.progress(st.session_state.errors_found / 3)
+    st.progress(min(st.session_state.errors_found / 3, 1.0))
     
     st.divider()
     
-    # Transition Logic: Only pops up when they've used the Editor button 3 times
+    # Transition Logic: Triggers after 3 errors are logged
     if st.session_state.errors_found >= 3:
         st.success("Target Reached: 3 Errors Found & Fixed!")
         
-        # Check if we need to swap to the second model or go to the survey
-        if "SWAPPED" not in [m['content'] for m in st.session_state.messages if m['role'] == 'system']:
+        # Check if we have already performed the swap
+        has_swapped = "SWAPPED" in [m['content'] for m in st.session_state.messages if m['role'] == 'system']
+        
+        if not has_swapped:
             if st.button("➡️ Start Next Task (Second Assistant)", use_container_width=True):
-                # Swap logic...
+                # 1. Swap the model mode
+                if "Autoregressive" in st.session_state.model_mode:
+                    st.session_state.model_mode = "Diffusion (Mercury 2)"
+                else:
+                    st.session_state.model_mode = "Autoregressive (Gemini)"
+                
+                # 2. Load Task 2 text 
+                # Source: The Emerald Canopy Urban initiative 
+                new_text = load_scenario_text(2) 
+                st.session_state.doc_content = new_text
+                
+                # 3. CRITICAL: Reset the comparison baseline so 'Fixed an error' button disables
+                st.session_state.last_synced_content = new_text 
+                
+                # 4. Reset counter and log the swap
+                st.session_state.errors_found = 0
+                st.session_state.messages.append({"role": "system", "content": "SWAPPED"})
+                
                 st.rerun()
         else:
+            # If already swapped, the only option left is to finish
             if st.button("🏁 Finish & Go to Survey", use_container_width=True, type="primary"):
                 st.switch_page("pages/2_Debrief_Survey.py")
 
@@ -81,10 +105,11 @@ if user_query := st.chat_input("Ask the AI to analyze the document..."):
         with st.status("Initializing model...", expanded=False) as status:
             placeholder = st.empty()
             
+            # When the user submits a query
             response_generator = get_assistant_response(
                 st.session_state.model_mode, 
                 user_query, 
-                st.session_state.doc_content,
+                st.session_state.doc_content, # This passes the text to the LLM
                 st.session_state.gemini_model,
                 st.session_state.mercury_client
             )
@@ -119,23 +144,36 @@ if user_query := st.chat_input("Ask the AI to analyze the document..."):
         
         st.session_state.messages.append({"role": "assistant", "content": full_response})
         st.session_state.is_running = False
-
 with col_editor:
     st.subheader("📝 Diagnostic Editor")
+    
+    # Ensure the 'value' is pulled from session_state where load_scenario_text saved it
     st.session_state.doc_content = st.text_area(
-        label="Edit the report to fix errors:",
-        value=st.session_state.doc_content,
-        height=550,
-        key="editor_area"
+        label="Analyze and fix the report below:",
+        value=st.session_state.get("doc_content", "Loading text..."), 
+        height=600,
+        key="main_editor" # Unique key for this widget
     )
     
-    # ACTION & INTERRUPT BUTTONS
+    # RE-EVALUATE: has_changed based on the new input
+    has_changed = st.session_state.doc_content.strip() != st.session_state.last_synced_content.strip()
+
     c1, c2 = st.columns(2)
     with c1:
+        # SYNC BUTTON: Pulls the AI's last message INTO the editor
         if st.button("🔄 Sync Assistant to Editor", use_container_width=True):
             if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
                 st.session_state.doc_content = st.session_state.messages[-1]["content"]
                 st.rerun()
+
+    if st.button("✅ I have fixed an error", use_container_width=True, disabled=not has_changed):
+        st.session_state.errors_found += 1
+        st.session_state.last_synced_content = st.session_state.doc_content # Update baseline
+        st.session_state.messages.append({
+            "role": "system", 
+            "content": f"PROGRESS: Error {st.session_state.errors_found} logged."
+        })
+        st.rerun()
     
 # Logic to check if they've actually changed anything since the last AI sync
     has_changed = st.session_state.doc_content.strip() != st.session_state.last_synced_content.strip()
