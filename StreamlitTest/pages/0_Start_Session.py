@@ -1,0 +1,96 @@
+import streamlit as st
+import time
+from utils import get_assistant_response
+
+# --- PAGE CONFIG ---
+st.set_page_config(layout="wide", page_title="Introduction & Warmup", initial_sidebar_state="collapsed")
+
+# --- SESSION STATE FOR WARMUP ---
+if "warmup_messages" not in st.session_state:
+    st.session_state.warmup_messages = []
+if "warmup_doc" not in st.session_state:
+    st.session_state.warmup_doc = "This is a PRACTICE document. Try editing this text!"
+if "is_running" not in st.session_state:
+    st.session_state.is_running = False
+
+st.title("Welcome to the AI Collaboration Study")
+
+# 1. CONSENT SECTION
+with st.expander("📝 Participant Consent & Information", expanded=True):
+    st.write("Please read the following information carefully:")
+    st.info("""
+    - **Goal:** You will collaborate with an AI to identify errors in text.
+    - **Your Task:** Use the chat to analyze text and the editor to fix it.
+    - **Privacy:** All data is anonymized via your Participant ID.
+    """)
+    agreed = st.checkbox("I have read the info and agree to participate.")
+
+if agreed:
+    st.divider()
+    st.subheader("🛠️ Interface Warmup (Practice Mode)")
+    st.write("Use this space to get comfortable with the tools. This data is **NOT** recorded.")
+    
+    # Guidance for the participant
+    st.markdown("""
+    **Try these three steps now:**
+    1. **Ask the AI** to "Find typos" in the text below.
+    2. **Stop the AI** early by clicking the red 'Log Error' button if you see it working.
+    3. **Sync the result** to the editor using the blue button.
+    """)
+
+    # --- MINI LAB LAYOUT (Mirroring 1_Diagnostic_Lab.py) ---
+    col_chat, col_editor = st.columns([1, 1.2], gap="large")
+
+    with col_chat:
+        # Simple Chat
+        warmup_container = st.container(height=300, border=True)
+        for msg in st.session_state.warmup_messages:
+            with warmup_container.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        if user_query := st.chat_input("Practice: Type 'Hello' or 'Find errors'..."):
+            st.session_state.is_running = True
+            st.session_state.warmup_messages.append({"role": "user", "content": user_query})
+            
+            with warmup_container.chat_message("assistant"):
+                # Using the real models so they see the actual visual style (AR vs Diffusion)
+                res_gen = get_assistant_response(
+                    st.session_state.model_mode, 
+                    user_query, 
+                    st.session_state.warmup_doc,
+                    st.session_state.gemini_model,
+                    st.session_state.mercury_client
+                )
+                
+                placeholder = st.empty()
+                full_res = ""
+                for update in res_gen:
+                    if not st.session_state.is_running: break
+                    
+                    if "Autoregressive" in st.session_state.model_mode:
+                        full_res = update
+                        placeholder.markdown(full_res)
+                    else:
+                        full_res = update["content"]
+                        placeholder.info(f"Refining: {update['effort']}")
+                        placeholder.markdown(full_res)
+                
+                st.session_state.warmup_messages.append({"role": "assistant", "content": full_res})
+
+    with col_editor:
+        # Mini Editor
+        st.session_state.warmup_doc = st.text_area("Practice Editor", value=st.session_state.warmup_doc, height=200)
+        
+        c1, c2 = st.columns(2)
+        if c1.button("🔄 Sync Practice"):
+            if st.session_state.warmup_messages:
+                st.session_state.warmup_doc = st.session_state.warmup_messages[-1]["content"]
+                st.rerun()
+        
+        if c2.button("🚨 Practice Stop", type="primary"):
+            st.session_state.is_running = False
+            st.toast("Practice interrupt captured!")
+
+    st.divider()
+    if st.button("🚀 I'm Ready - Start Real Experiment"):
+        st.switch_page("pages/1_Diagnostic_Lab.py")

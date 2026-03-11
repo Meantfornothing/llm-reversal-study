@@ -44,54 +44,53 @@ def init_models():
 
 def get_assistant_response(model_mode, user_query, current_doc, gemini_model, mercury_client):
     """
-    Routes the request to the correct model logic based on the selected architecture.
+    Routes the request to the correct model logic and provides 
+    the generator needed for the interruptible UI loop.
     """
-    # Combine the document context with the user's specific request
+    # Contextualize the prompt with the current state of the diagnostic editor
     full_context = f"CURRENT DOCUMENT CONTENT:\n{current_doc}\n\nUSER REQUEST: {user_query}"
     
     if model_mode == "Autoregressive (Gemini)":
-        # Returns the generator from stream_gemini which yields text chunks
+        # Returns the word-by-word governed generator
         return stream_gemini(full_context, gemini_model)
     else:
-        # Returns the generator from run_mercury_diffusion which yields effort levels
+        # Returns the step-by-step refinement generator
         return run_mercury_diffusion(full_context, mercury_client)
-
-# StreamlitTest/utils.py
 
 # --- THE GOVERNOR CONFIG ---
 WORDS_PER_SECOND = 4  # Standardized speed for ARLLM
 
+# StreamlitTest/utils.py
+
 def stream_gemini(prompt, model):
-    """Yields text chunks with an artificial delay (The Governor)."""
+    """Yields text chunks while checking for a stop signal."""
     response = model.generate_content(prompt, stream=True)
     full_text = ""
     for chunk in response:
+        # Check if the user clicked stop (managed via session_state in the UI loop)
+        if not st.session_state.get("is_running", True):
+            return # Exit the generator immediately
+        
         if chunk.text:
-            # We split by space to simulate a 'word-by-word' typewriter
-            words = chunk.text.split()
-            for word in words:
-                full_text += word + " "
-                yield full_text
-                # Force the human-readable pace
-                time.sleep(1 / WORDS_PER_SECOND)
+            full_text += chunk.text
+            yield full_text
+            time.sleep(0.1) # Governor delay
 
 def run_mercury_diffusion(prompt, client):
-    """
-    Standardized Diffusion stages. 
-    Each 'effort' is a global refinement pass.
-    """
+    """Runs diffusion efforts but aborts if is_running becomes False."""
     efforts = ["instant", "low", "medium", "high"]
     
-    # Total expected time should roughly match ARLLM for fairness
-    # We'll use 2.5 seconds per 'global' update
     for effort in efforts:
+        # Check stop signal BEFORE making the next expensive API call
+        if not st.session_state.get("is_running", True):
+            break
+            
         response = client.chat.completions.create(
             model="mercury-2",
             messages=[{"role": "user", "content": prompt}],
             extra_body={"reasoning_effort": effort}
         )
+        
         content = response.choices[0].message.content
         yield {"effort": effort, "content": content}
-        
-        # This pause allows the user to 'audit' the global draft
-        time.sleep(2.5)
+        time.sleep(1.5) # Governor delay

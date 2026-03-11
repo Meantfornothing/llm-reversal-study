@@ -15,20 +15,31 @@ if "model_mode" not in st.session_state:
     st.session_state.model_mode = "Autoregressive (Gemini)"
 
 # --- PAGE CONFIG ---
-st.set_page_config(layout="wide", page_title="Step 1: Diagnostic Lab")
+# Add this to the top of 1_Diagnostic_Lab.py and 2_Debrief_Survey.py
+st.set_page_config(
+    layout="wide", 
+    page_title="Study Session", 
+    initial_sidebar_state="collapsed" # Hides the page list
+)
 
 # --- SIDEBAR CONTROLS ---
-with st.sidebar:
-    st.header("Experiment Settings")
-    st.session_state.model_mode = st.radio(
-        "Current AI Architecture:",
-        ["Autoregressive (Gemini)", "Diffusion (Mercury 2)"]
-    )
-    st.divider()
-    if st.button("Clear Chat"):
-        st.session_state.messages = []
-        st.rerun()
+# Inside StreamlitTest/pages/1_Diagnostic_Lab.py
 
+# Replace the sidebar radio button with this logic:
+with st.sidebar:
+    st.header("Session Info")
+    st.write(f"Participant: **{st.session_state.get('p_id', 'N/A')}**")
+    
+    # Generic labeling for the participant
+    display_name = "Assistant Alpha" if "Autoregressive" in st.session_state.model_mode else "Assistant Beta"
+    st.success(f"Connected to: **{display_name}**")
+    
+    # Hide the 'Clear Chat' and other technical buttons behind an expander if needed
+    with st.expander("Researcher Tools"):
+        if st.button("Force Clear"):
+            st.session_state.messages = []
+            st.rerun()
+            
 # --- DUAL-PANE LAYOUT ---
 col_chat, col_editor = st.columns([1, 1.2], gap="large")
 
@@ -98,9 +109,38 @@ with col_editor:
                 st.session_state.doc_content = st.session_state.messages[-1]["content"]
                 st.rerun()
     
-    with c2:
-        # This button serves as the main 'Interrupt' measurement
-        if st.button("🚨 Log Diagnostic Error", use_container_width=True, type="primary"):
-            st.session_state.is_running = False # Stops the loop in col_chat
-            elapsed = time.time() - (st.session_state.start_time or time.time())
-            st.toast(f"Error caught at {elapsed:.2f}s!", icon="✅")
+    # StreamlitTest/pages/1_Diagnostic_Lab.py
+
+with c2:
+    if st.button("🚨 Log Diagnostic Error", use_container_width=True, type="primary"):
+        # 1. Immediate Kill Switch
+        st.session_state.is_running = False 
+        
+        # 2. Capture timing
+        start = st.session_state.get("start_time", time.time())
+        elapsed = time.time() - start
+        
+        # 3. Store temporary data for the 'Reason' popup
+        st.session_state.temp_elapsed = elapsed
+        st.session_state.show_stop_reason = True
+        st.rerun()
+
+# Display the reason selection only after a stop
+if st.session_state.get("show_stop_reason", False):
+    st.divider()
+    with st.container(border=True):
+        st.warning(f"Interrupt captured at **{st.session_state.temp_elapsed:.2f}s**. Why did you stop?")
+        reason = st.radio(
+            "Select Reason:",
+            ["Early Success (Found the error)", "Wrong Direction/Hallucination", "Output was too slow", "Other"],
+            horizontal=True
+        )
+        if st.button("Confirm Log"):
+            # Finalize logging
+            st.session_state.messages.append({
+                "role": "system", 
+                "content": f"INTERRUPT: {reason} at {st.session_state.temp_elapsed:.2f}s"
+            })
+            st.session_state.show_stop_reason = False
+            st.toast("Data points logged for study!", icon="📊")
+            st.rerun()

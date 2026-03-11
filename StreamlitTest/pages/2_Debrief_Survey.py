@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+from datetime import datetime
 
 st.set_page_config(layout="wide", page_title="Step 2: LLM Evaluation")
 
@@ -111,9 +112,16 @@ if submit:
     ar_tlx = (ar_mental + ar_temp + ar_frust + ar_perf) / 4
     dl_tlx = (dllm_mental + dllm_temp + dllm_frust + dllm_perf) / 4
     
+    # 2. Extract Interrupt Logs from the session state
+    # We filter the chat messages for 'system' messages containing our interrupt data
+    interrupts = [m['content'] for m in st.session_state.get("messages", []) if m['role'] == 'system']
     # Unified results dictionary containing ALL data
     data = {
         "p_id": st.session_state.get("p_id", "N/A"),
+        "laptop_id": st.session_state.get("laptop_id", "N/A"), # From Researcher Setup
+        "initial_model": st.session_state.get("initial_model_choice", "N/A"), # Fixed ordering
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "interrupt_logs": " | ".join(interrupts), # Combine all interrupts into one cell
         "pref_choice": preference,
         "agency_choice": agency_score,
         "ar_total_tlx": ar_tlx,
@@ -137,17 +145,15 @@ if submit:
     
     try:
         df = pd.DataFrame([data])
-        csv_path = "quantitative/results/survey_data.csv"
+        # Use a unique filename for each participant to prevent data loss
+        p_id = st.session_state.get("p_id", "unknown")
+        csv_path = f"quantitative/results/participant_{p_id}.csv"
         
-        # Ensure the directory exists
         os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+        df.to_csv(csv_path, index=False)
         
-        # Append to CSV
-        df.to_csv(csv_path, mode='a', header=not os.path.exists(csv_path), index=False)
-        
-        st.success(f"Success! Workloads Logged -> AR: {ar_tlx:.2f} | DLLM: {dl_tlx:.2f}")
+        st.success(f"Trial Data Saved for Participant {p_id}!")
         st.balloons()
     except Exception as e:
         st.error(f"Error saving data: {e}")
-
 
