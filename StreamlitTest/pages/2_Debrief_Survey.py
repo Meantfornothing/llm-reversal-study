@@ -134,37 +134,50 @@ with st.form("unified_study_form"):
 
 # --- DATA LOGGING ---
 if submit:
+# Instead of adding ar_perf directly, we subtract it from 11
+# This way, if they feel 10/10 successful, it adds only 1 point to workload.
+# If they feel 1/10 successful (failure), it adds 10 points to workload.
     if "No" in consent_final:
-        st.error("⚠️ You have withdrawn. No data has been saved. You may now close this window.")
-        # Clear sensitive session data immediately for participant privacy
-        st.session_state.messages = []
-        st.session_state.p_id = "WITHDRAWN"
+            st.error("⚠️ You have withdrawn. No data has been saved. You may now close this window.")
+            # Clear sensitive session data immediately for participant privacy
+            st.session_state.messages = []
+            st.session_state.p_id = "WITHDRAWN"
     else:
-        # 1. Calculate TLX Averages
-        ar_tlx = (ar_mental + ar_temp + ar_frust + ar_perf) / 5
-        dl_tlx = (dllm_mental + dllm_temp + dllm_frust + dllm_perf) / 5
+            # 1. Calculate TLX Averages
+        ar_tlx = (ar_mental + ar_temp + ar_frust + (11 - ar_perf) + ar_effort) / 5
+        dl_tlx = (dllm_mental + dllm_temp + dllm_frust + (11 - dllm_perf) + dllm_effort) / 5
         
-        # 2. Extract Interrupt Logs (System messages) from Diagnostic Lab
-        interrupts = [m['content'] for m in st.session_state.get("messages", []) if m['role'] == 'system']
-        
-        # 3. Compile Unified Data Dictionary
-        data = {
-            "p_id": st.session_state.get("p_id", "N/A"),
-            "laptop_id": st.session_state.get("laptop_id", "N/A"),
-            "initial_model": st.session_state.get("initial_model_choice", "N/A"),
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "interrupt_logs": " | ".join(interrupts),
-            "pref_choice": preference,
-            "agency_choice": agency_score,
-            "ar_total_tlx": ar_tlx,
-            "dl_total_tlx": dl_tlx,
-            "ar_mental": ar_mental, "ar_temp": ar_temp, "ar_frust": ar_frust, "ar_perf": ar_perf,"ar_effort": ar_effort,
-            "ar_natural": ar_natural, "ar_wait": ar_wait, "ar_qual_notes": ar_qual_notes, "ar_understand_notes": ar_understand_notes, 
-            "dl_mental": dllm_mental, "dl_temp": dllm_temp, "dl_frust": dllm_frust, "dl_perf": dllm_perf,"dl_effort": dllm_effort, 
-            "dl_natural": dllm_natural, "dl_stability": dllm_stability, "dl_qual_notes": dl_qual_notes,"dl_understand_notes": dl_understand_notes,
-            "overall_why": why_text
-        }
-        
+    # Unified results dictionary
+    data = {
+        "p_id": st.session_state.get("p_id", "N/A"),
+        "laptop_id": st.session_state.get("laptop_id", "N/A"),
+        "initial_model": st.session_state.get("initial_model_choice", "N/A"),
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "interrupt_logs": " | ".join(interrupts),
+        "pref_choice": preference,
+        "agency_choice": agency_score,
+        "ar_total_tlx": ar_tlx,
+        "dl_total_tlx": dl_tlx,
+        "ar_mental": ar_mental,
+        "ar_temp": ar_temp,
+        "ar_frust": ar_frust,
+        "ar_perf": ar_perf,
+        "ar_effort": ar_effort,
+        "ar_natural": ar_natural,
+        "ar_wait": ar_wait,
+        "ar_qual_notes": ar_qual_notes,
+        "ar_understand_notes": ar_understand_notes, 
+        "dl_mental": dllm_mental,
+        "dl_temp": dllm_temp,
+        "dl_frust": dllm_frust,
+        "dl_perf": dllm_perf,
+        "dl_effort": dllm_effort, 
+        "dl_natural": dllm_natural,
+        "dl_stability": dllm_stability,
+        "dl_qual_notes": dl_qual_notes,
+        "dl_understand_notes": dl_understand_notes,
+        "overall_why": why_text
+    }
     
     try:
         # Create a directory if it doesn't exist
@@ -180,3 +193,4 @@ if submit:
         st.balloons()
     except Exception as e:
         st.error(f"Error saving data: {e}")
+
