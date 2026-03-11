@@ -127,9 +127,12 @@ with st.form("unified_study_form"):
 
 # --- DATA LOGGING ---
 if submit:
-    # Calculate Raw TLX for both
-    ar_tlx = (ar_mental + ar_temp + ar_frust + ar_perf + ar_effort) / 5
-    dl_tlx = (dllm_mental + dllm_temp + dllm_frust + dllm_perf + dllm_effort) / 5
+# Instead of adding ar_perf directly, we subtract it from 11
+# This way, if they feel 10/10 successful, it adds only 1 point to workload.
+# If they feel 1/10 successful (failure), it adds 10 points to workload.
+
+    ar_tlx = (ar_mental + ar_temp + ar_frust + (11 - ar_perf) + ar_effort) / 5
+    dl_tlx = (dllm_mental + dllm_temp + dllm_frust + (11 - dllm_perf) + dllm_effort) / 5
     
     # Unified results dictionary
     data = {
@@ -173,3 +176,4 @@ if submit:
         st.balloons()
     except Exception as e:
         st.error(f"Error saving data: {e}")
+
