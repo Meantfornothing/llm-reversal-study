@@ -16,86 +16,82 @@ if "is_running" not in st.session_state:
 st.title("Welcome to the AI Collaboration Study")
 
 # 1. CONSENT SECTION
+# StreamlitTest/pages/0_Start_Session.py
+
+st.title("Welcome to the AI Collaboration Study")
+
+# 1. CONSENT & INSTITUTIONAL INFO
 with st.expander("📝 Participant Consent & Information", expanded=True):
-    st.write("Please read the following information carefully:")
-    st.info("- Data is anonymized. You may withdraw at the end.")
+    st.markdown("""
+    ### Research Study: Human-AI Collaboration Patterns
+    **University of Gothenburg | Department of Applied IT**
+    
+    We are conducting a research study to understand how different AI architectures 
+    (Autoregressive vs. Diffusion) influence human diagnostic workflows. 
+    Your participation helps us map the future of collaborative error-detection.
+    """)
+    st.info("- Data is anonymized. You may withdraw at any point before submission.")
     agreed = st.checkbox("I have read the info and agree to participate.")
 
-# --- SILENT DUAL WARMUP ---
-# StreamlitTest/pages/0_Start_Session.py
+
+# Add this to the 'Initialization' section of 0_Start_Session.py
+
 if agreed and "apis_warmed" not in st.session_state:
-    with st.spinner("Initializing Assistant Connections..."):
-        try:
-            # Warm up Mistral
-            st.session_state.mistral_client.chat.completions.create(
-                model="mistral-small-latest",
-                messages=[{"role": "user", "content": "Ping"}],
-                max_tokens=1
-            )
-            # Warm up Mercury
-            st.session_state.mercury_client.chat.completions.create(
-                model="mercury-2",
-                messages=[{"role": "user", "content": "Ping"}],
-                max_tokens=1
-            )
-            st.session_state.apis_warmed = True
-        except Exception as e:
-            st.error(f"Connection Lag: {e}")
+    with st.status("📡 Checking Satellite Uplink (API Ping)...") as status:
+        # Check Mistral
+        t0 = time.time()
+        st.session_state.mistral_client.chat.completions.create(
+            model="mistral-small-latest", messages=[{"role": "user", "content": "ping"}], max_tokens=1
+        )
+        mistral_ping = time.time() - t0
+        st.write(f"✅ Mistral Latency: {mistral_ping:.2f}s")
+        
+        # Check Mercury
+        t1 = time.time()
+        st.session_state.mercury_client.chat.completions.create(
+            model="mercury-2", messages=[{"role": "user", "content": "ping"}], max_tokens=1
+        )
+        mercury_ping = time.time() - t1
+        st.write(f"✅ Mercury Latency: {mercury_ping:.2f}s")
+        
+        st.session_state.apis_warmed = True
+        status.update(label="System Ready", state="complete")
 
 if agreed:
-# --- 2. DEMOGRAPHICS SECTION ---
+    # --- 2. DEMOGRAPHICS SECTION ---
     with st.container(border=True):
         st.subheader("📊 Participant Profile")
-        st.write("Please provide some basic information before we begin.")
-        
         col_dem_1, col_dem_2 = st.columns(2)
         with col_dem_1:
-            # We assign these directly to session_state keys
             st.session_state.age = st.number_input("Age", min_value=18, max_value=100, value=20)
             st.session_state.gender = st.selectbox("Gender", ["Female", "Male", "Non-binary", "Other", "Prefer not to say"])
-        
         with col_dem_2:
-            st.session_state.field_study = st.text_input("Field of Study", placeholder="e.g., Biology, Engineering")
-            st.session_state.ai_familiarity = st.select_slider(
-                "AI Familiarity",
-                options=["Novice", "Occasional", "Frequent", "Expert"]
-            )
+            st.session_state.field_study = st.text_input("Field of Study", placeholder="e.g., Biology")
+            st.session_state.ai_familiarity = st.select_slider("AI Familiarity", options=["Novice", "Occasional", "Frequent", "Expert"])
 
     st.divider()
     st.subheader("🛠️ Interface Warmup (Practice Mode)")
-    st.write("Use this space to get comfortable with the tools. This data is **NOT** recorded.")
     
-    # Guidance for the participant
-    st.markdown("""
-    **Try these three steps now:**
-    1. **Ask the AI** to "Find typos" in the text below.
-    2. **Stop the AI** early by clicking the red 'Log Error' button if you see it working.
-    3. **Sync the result** to the editor using the blue button.
-    """)
-
-    # --- MINI LAB LAYOUT (Mirroring 1_Diagnostic_Lab.py) ---
     col_chat, col_editor = st.columns([1, 1.2], gap="large")
 
     with col_chat:
-        # Simple Chat
         warmup_container = st.container(height=300, border=True)
         for msg in st.session_state.warmup_messages:
             with warmup_container.chat_message(msg["role"]):
                 st.markdown(msg["content"])
 
-        if user_query := st.chat_input("Practice: Type 'Hello' or 'Find errors'..."):
+        if user_query := st.chat_input("Practice: Type 'Find errors'..."):
             st.session_state.is_running = True
             st.session_state.warmup_messages.append({"role": "user", "content": user_query})
             
             with warmup_container.chat_message("assistant"):
-                # IMPORTANT: Added st.session_state.mistral_client as the 6th argument
+                # Pass the two correct clients to get_assistant_response
                 res_gen = get_assistant_response(
                     st.session_state.model_mode, 
                     user_query, 
                     st.session_state.warmup_doc,
-                    st.session_state.gemini_model,
-                    st.session_state.mercury_client,
-                    st.session_state.mistral_client # <--- Added this
+                    st.session_state.mercury_client, # Updated param order
+                    st.session_state.mistral_client  # Updated param order
                 )
                 
                 placeholder = st.empty()
@@ -103,36 +99,32 @@ if agreed:
                 for update in res_gen:
                     if not st.session_state.is_running: break
                     
-                    if "Autoregressive" in st.session_state.model_mode:
+                    if "Mistral" in st.session_state.model_mode:
                         full_res = update
                         placeholder.markdown(full_res)
                     else:
                         full_res = update["content"]
-                        placeholder.info(f"Refining: {update['effort']}")
-                        placeholder.markdown(full_res)
+                        placeholder.markdown(f"**Refining:** {update['effort'].upper()}\n\n{full_res}")
                 
                 st.session_state.warmup_messages.append({"role": "assistant", "content": full_res})
 
     with col_editor:
-        # Mini Editor
-        st.session_state.warmup_doc = st.text_area("Practice Editor", value=st.session_state.warmup_doc, height=200)
+        # Use a key to ensure manual syncing works in warmup too
+        st.session_state.warmup_doc = st.text_area("Practice Editor", value=st.session_state.warmup_doc, height=200, key="warmup_editor")
         
         c1, c2 = st.columns(2)
         if c1.button("🔄 Sync Practice"):
             if st.session_state.warmup_messages:
-                st.session_state.warmup_doc = st.session_state.warmup_messages[-1]["content"]
+                last_ai_msg = st.session_state.warmup_messages[-1]["content"]
+                st.session_state.warmup_doc = last_ai_msg
+                st.session_state["warmup_editor"] = last_ai_msg
                 st.rerun()
         
         if c2.button("🚨 Practice Stop", type="primary"):
             st.session_state.is_running = False
             st.toast("Practice interrupt captured!")
 
-    st.divider()
-    
     if st.session_state.get('field_study'):
         if st.button("🚀 I'm Ready - Start Real Experiment"):
-            # Clean up warmup state so it doesn't bleed into the real experiment
             st.session_state.messages = [] 
             st.switch_page("pages/1_Diagnostic_Lab.py")
-    else:
-        st.caption("⚠️ Please fill in your Field of Study to enable the start button.")
