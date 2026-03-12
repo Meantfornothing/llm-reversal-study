@@ -22,23 +22,25 @@ with st.expander("📝 Participant Consent & Information", expanded=True):
     agreed = st.checkbox("I have read the info and agree to participate.")
 
 # --- SILENT DUAL WARMUP ---
+# StreamlitTest/pages/0_Start_Session.py
 if agreed and "apis_warmed" not in st.session_state:
     with st.spinner("Initializing Assistant Connections..."):
         try:
-            # Warm up Gemini (AR)
-            st.session_state.gemini_model.generate_content("Ping", generation_config={"max_output_tokens": 1})
-            
-            # Warm up Mercury (Diffusion)
+            # Warm up Mistral
+            st.session_state.mistral_client.chat.completions.create(
+                model="mistral-small-latest",
+                messages=[{"role": "user", "content": "Ping"}],
+                max_tokens=1
+            )
+            # Warm up Mercury
             st.session_state.mercury_client.chat.completions.create(
                 model="mercury-2",
                 messages=[{"role": "user", "content": "Ping"}],
-                extra_body={"reasoning_effort": "instant"},
                 max_tokens=1
             )
             st.session_state.apis_warmed = True
-            st.toast("Systems Online", icon="🛰️")
         except Exception as e:
-            st.error(f"Connection Lag Detected: {e}")
+            st.error(f"Connection Lag: {e}")
 
 if agreed:
 # --- 2. DEMOGRAPHICS SECTION ---
@@ -86,13 +88,14 @@ if agreed:
             st.session_state.warmup_messages.append({"role": "user", "content": user_query})
             
             with warmup_container.chat_message("assistant"):
-                # Using the real models so they see the actual visual style (AR vs Diffusion)
+                # IMPORTANT: Added st.session_state.mistral_client as the 6th argument
                 res_gen = get_assistant_response(
                     st.session_state.model_mode, 
                     user_query, 
                     st.session_state.warmup_doc,
                     st.session_state.gemini_model,
-                    st.session_state.mercury_client
+                    st.session_state.mercury_client,
+                    st.session_state.mistral_client # <--- Added this
                 )
                 
                 placeholder = st.empty()

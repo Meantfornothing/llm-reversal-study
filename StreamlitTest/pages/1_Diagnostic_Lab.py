@@ -1,6 +1,6 @@
 import streamlit as st
 import time
-from utils import stream_gemini, run_mercury_diffusion, get_assistant_response,load_scenario_text
+from utils import run_mercury_diffusion, get_assistant_response,load_scenario_text
 
 # --- 0. PAGE CONFIG (MUST BE FIRST) ---
 st.set_page_config(
@@ -9,7 +9,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 1. SESSION STATE INITIALIZATION ---
+# --- 1. SESSION STATE INITIALIZATION (Top of File) ---
 if "doc_content" not in st.session_state:
     st.session_state.doc_content = ""
 if "last_synced_content" not in st.session_state:
@@ -22,12 +22,13 @@ if st.session_state.doc_content == "":
     loaded_text = load_scenario_text(1)
     if "Error:" in loaded_text:
         st.error(loaded_text)
-        # Provide a fallback so the app doesn't crash on line 159
-        st.session_state.doc_content = "FILE MISSING"
-        st.session_state.last_synced_content = "FILE MISSING"
+        # Fallback values to prevent crashes on lines using .strip()
+        st.session_state.doc_content = "FILE_MISSING"
+        st.session_state.last_synced_content = "FILE_MISSING"
     else:
         st.session_state.doc_content = loaded_text
         st.session_state.last_synced_content = loaded_text
+        
 # --- SIDEBAR CONTROLS ---
 # Inside StreamlitTest/pages/1_Diagnostic_Lab.py
 
@@ -93,56 +94,49 @@ with col_chat:
 # 3. CHAT INPUT & INTERRUPTIBLE LOOP
 if user_query := st.chat_input("Ask the AI to analyze the document..."):
     st.session_state.is_running = True
-    st.session_state.start_time = time.time() # This is the start of the whole process
+    st.session_state.start_time = time.time() 
     st.session_state.messages.append({"role": "user", "content": user_query})
     
     with chat_container.chat_message("user"):
         st.markdown(user_query)
 
     with chat_container.chat_message("assistant"):
-        # UI Bridge: Immediate visual feedback while the API prepares
-        with st.status("Initializing model...", expanded=False) as status:
+        with st.status("Assistant Analyzing...", expanded=False) as status:
             placeholder = st.empty()
             
-            # When the user submits a query
             response_generator = get_assistant_response(
                 st.session_state.model_mode, 
                 user_query, 
-                st.session_state.doc_content, # This passes the text to the LLM
-                st.session_state.gemini_model,
-                st.session_state.mercury_client
+                st.session_state.doc_content, 
+                st.session_state.mercury_client, 
+                st.session_state.mistral_client  
             )
             
             full_response = ""
-            first_token_received = False
-
             for update in response_generator:
                 if not st.session_state.is_running:
                     break 
-                
-                # Capture TTFT (Time to First Token)
-                if not first_token_received:
-                    ttft = time.time() - st.session_state.start_time
-                    st.session_state.messages.append({
-                        "role": "system", 
-                        "content": f"METRIC: TTFT {ttft:.2f}s"
-                    })
-                    status.update(label="Assistant Generating...", state="running")
-                    first_token_received = True
 
-                if st.session_state.model_mode == "Autoregressive (Gemini)":
+                if "Mistral" in st.session_state.model_mode:
                     full_response = update 
                     placeholder.markdown(full_response)
                 else:
-                    full_response = update["content"]
+                    full_response = update["content"] 
                     with placeholder.container():
-                        st.info(f"🧬 Assistant Beta Refinement: **{update['effort'].upper()}**")
+                        st.info(f"🧬 Diffusion Refinement: **{update['effort'].upper()}**")
                         st.markdown(full_response)
             
-            status.update(label="Response Complete", state="complete")
+            status.update(label="Analysis Complete", state="complete")
         
+        # 1. Save the final response to chat history
         st.session_state.messages.append({"role": "assistant", "content": full_response})
         st.session_state.is_running = False
+
+        # 2. AUTO-SYNC: Push the response directly to the editor
+        st.session_state.doc_content = full_response
+        
+        # 3. RERUN: Refresh the page so the editor reflects the change immediately
+        st.rerun()
 with col_editor:
     st.subheader("📝 Diagnostic Editor")
     
@@ -174,23 +168,25 @@ with col_editor:
         })
         st.rerun()
     
-# Logic to check if they've actually changed anything since the last AI sync
-    has_changed = st.session_state.doc_content.strip() != st.session_state.last_synced_content.strip()
+# --- Updated section in 1_Diagnostic_Lab.py ---
 
-# This is the ONLY button that should increment the count
-    if st.button("✅ I have fixed an error", use_container_width=True, disabled=not has_changed):
-        st.session_state.errors_found += 1
-        st.session_state.last_synced_content = st.session_state.doc_content
-        
-        # Log the progress for your final data analysis
-        st.session_state.messages.append({
-            "role": "system", 
-            "content": f"PROGRESS: Error {st.session_state.errors_found} logged."
-        })
-        st.rerun()
+# Logic to check for changes
+has_changed = st.session_state.doc_content.strip() != st.session_state.last_synced_content.strip()
 
-    if not has_changed:
-        st.caption("⚠️ Edit the text in the editor above to enable error logging.")
+# Add a unique key to prevent the DuplicateElementId error
+if st.button("✅ I have fixed an error", use_container_width=True, disabled=not has_changed, key="btn_fix_error_main"):
+    st.session_state.errors_found += 1
+    st.session_state.last_synced_content = st.session_state.doc_content
+    
+    # Log the progress
+    st.session_state.messages.append({
+        "role": "system", 
+        "content": f"PROGRESS: Error {st.session_state.errors_found} logged."
+    })
+    st.rerun()
+
+if not has_changed:
+    st.caption("⚠️ Edit the text in the editor above to enable error logging.")
 
 with c2:
     if st.button("🚨 Log Diagnostic Error", use_container_width=True, type="primary"):

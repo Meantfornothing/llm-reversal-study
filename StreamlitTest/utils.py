@@ -1,122 +1,111 @@
 import streamlit as st
-import google.generativeai as genai
-import mercury_api
+from openai import OpenAI
 from dotenv import load_dotenv
 import os
 import time
-from openai import OpenAI
 
 # Load global .env from the root directory
 load_dotenv(os.path.join(os.path.dirname(__file__), '../.env'))
 
-# StreamlitTest/utils.py
-
-# --- GEMINI CONFIG (AR) ---
-# Limit output to prevent 'rambling' and keep audits concise
-gemini_config = {
-    "temperature": 0.7,
-    "max_output_tokens": 500,  # Limits the length of each response
-    "top_p": 0.95,
-}
-
-# --- MERCURY 2 CONFIG (Diffusion) ---
-# Control the number of steps and complexity
-mercury_config = {
-    "max_tokens": 500,
-    "diffusion_steps": [20, 100, 300], # Only run 3 refinement passes instead of 10+
-}
-
 def init_models():
-    """Initializes and returns both model clients."""
-    # 1. Initialize Gemini with the correct preview ID
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    # FIX: Add '-preview' to the model name
-    gemini_model = genai.GenerativeModel('gemini-3-flash-preview') 
-    
-    # 2. Initialize Mercury 2
+    """Initializes and returns Mercury and Mistral clients."""
+    # 1. Initialize Mercury 2 (Diffusion)
     mercury_client = OpenAI(
         api_key=os.getenv("MERCURY_API_KEY"),
         base_url="https://api.inceptionlabs.ai/v1"
     )
     
-    return gemini_model, mercury_client
-# StreamlitTest/utils.py
+    # 2. Initialize Mistral (Autoregressive)
+    mistral_client = OpenAI(
+        api_key=os.getenv("MISTRAL_API_KEY"),
+        base_url="https://api.mistral.ai/v1"
+    )
+    
+    return mercury_client, mistral_client
 
-def get_assistant_response(model_mode, user_query, current_doc, gemini_model, mercury_client):
-    """
-    Routes the request to the correct model logic and provides 
-    the context needed for the audit.
-    """
-    # 1. PLACE IT HERE: Create the combined context
+def get_assistant_response(model_mode, user_query, current_doc, mercury_client, mistral_client):
+    """Routes request to either Mistral or Mercury."""
     full_context = f"DOCUMENT TO AUDIT:\n{current_doc}\n\nUSER QUESTION: {user_query}"
     
-    # 2. Add some "Speed Slicing" (Last 2 chat messages for context)
-    # This prevents the 12s lag from getting worse as the chat grows
-    recent_history = st.session_state.messages[-2:] if len(st.session_state.messages) > 2 else []
+    # Speed Slicing: Last 2 chat messages for context
+    recent_history = st.session_state.messages[-2:] if len(st.session_state.get("messages", [])) > 2 else []
     history_str = "\n".join([f"{m['role']}: {m['content']}" for m in recent_history])
-    
-    # Final Prompt sent to the models
     final_prompt = f"{full_context}\n\nRECENT HISTORY:\n{history_str}"
 
-    if "Autoregressive" in model_mode:
-        # Pass the combined prompt to the Gemini streamer
-        return stream_gemini(final_prompt, gemini_model)
+    if "Mistral" in model_mode:
+        return stream_mistral(final_prompt, mistral_client)
     else:
-        # Pass the combined prompt to the Mercury streamer
         return run_mercury_diffusion(final_prompt, mercury_client)
-# --- THE GOVERNOR CONFIG ---
-WORDS_PER_SECOND = 4  # Standardized speed for ARLLM
-
-# StreamlitTest/utils.py
-
-def stream_gemini(prompt, model):
-    """Yields text chunks while checking for a stop signal."""
-    response = model.generate_content(prompt, stream=True)
+WORDS_PER_SECOND = 4
+MAX_RESPONSE_WORDS = 150
+def stream_mistral(prompt, client):
+    """Yields text with a 4 words-per-second governor and a word limit."""
+    response = client.chat.completions.create(
+        model="mistral-small-latest",
+        messages=[{"role": "user", "content": prompt}],
+        stream=True
+    )
+    
     full_text = ""
+    word_count = 0
+    
     for chunk in response:
-        # Check if the user clicked stop (managed via session_state in the UI loop)
         if not st.session_state.get("is_running", True):
-            return # Exit the generator immediately
+            return
         
-        if chunk.text:
-            full_text += chunk.text
+        content = chunk.choices[0].delta.content
+        if content:
+            # Add content to buffer
+            full_text += content
+            
+            # Simple governor: pause briefly after each 'chunk' 
+            # to simulate human-like reading/typing speed
             yield full_text
-            time.sleep(0.1) # Governor delay
+            time.sleep(1 / WORDS_PER_SECOND) 
+            
+            # Basic word limit check
+            word_count = len(full_text.split())
+            if word_count >= MAX_RESPONSE_WORDS:
+                yield full_text + "\n\n[Word limit reached for study audit]"
+                return
 
 def run_mercury_diffusion(prompt, client):
-    """Runs diffusion efforts but aborts if is_running becomes False."""
+    """Runs diffusion efforts for Mercury with a word limit."""
     efforts = ["instant", "low", "medium", "high"]
-    
     for effort in efforts:
-        # Check stop signal BEFORE making the next expensive API call
         if not st.session_state.get("is_running", True):
             break
-            
         response = client.chat.completions.create(
             model="mercury-2",
             messages=[{"role": "user", "content": prompt}],
             extra_body={"reasoning_effort": effort}
         )
-        
         content = response.choices[0].message.content
+        
+        # --- NEW: Word limit check for Mercury ---
+        words = content.split()
+        if len(words) > MAX_RESPONSE_WORDS:
+            content = " ".join(words[:MAX_RESPONSE_WORDS]) + "... [Word limit reached]"
+        
         yield {"effort": effort, "content": content}
-        time.sleep(1.5) # Governor delay
+        time.sleep(1.5) # Delay between refinement steps
 
 # StreamlitTest/utils.py
 
-# Inside utils.py
-
 def load_scenario_text(task_num):
-    """Loads the audit text from the data folder."""
-    # Use underscores to match renamed files
+    """Loads the audit text using an absolute path relative to this file."""
+    # 1. Determine the filename based on the task
     filename = "The_Aurora_7_Deep_Sea.txt" if task_num == 1 else "The_Emerald_Canopy_Urban.txt"
     
-    # Use a relative path starting from the root of your repo
-    import os
-    file_path = os.path.join("data", "scenarios", filename)
+    # 2. Get the directory where THIS utils.py file is located (StreamlitTest/)
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # 3. Build the absolute path to the file inside StreamlitTest/data/scenarios/
+    file_path = os.path.join(current_dir, "data", "scenarios", filename)
     
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
+        # This will now show the full path it tried to use, making debugging easier
         return f"Error: Scenario file not found at {file_path}"
