@@ -131,7 +131,6 @@ with st.form("unified_study_form"):
     submit = st.form_submit_button("Complete Study")
 
 
-# --- DATA LOGGING (Inside if submit: block) ---
 # --- DATA LOGGING (Inside if submit: block of 2_Debrief_Survey.py) ---
 
 if submit:
@@ -173,7 +172,17 @@ if submit:
             
             # --- NASA-TLX & Survey Evaluations ---
             "ar_total_tlx": ar_tlx,
-            "dl_total_tlx": dl_tlx,
+            "ar_mental": ar_mental, 
+            "ar_temp": ar_temp, 
+            "ar_frust": ar_frust,
+            "ar_perf)": ar_perf, 
+            "ar_effort":ar_effort,
+            "dllm_total_tlx": dl_tlx,
+            "dl_mental": dllm_mental, 
+            "dllm_temp": dllm_temp, 
+            "dllm_frust": dllm_frust,
+            "dllm_perf)": dllm_perf, 
+            "dllm_effort":dllm_effort,
             "pref_choice": preference,
             "agency_choice": agency_score,
             "overall_why": why_text,
