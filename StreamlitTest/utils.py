@@ -24,8 +24,8 @@ def get_assistant_response(model_mode, user_query, current_doc, mercury_client, 
         "STRICT RESEARCH CONSTRAINTS:\n"
         "- NEVER provide the full corrected document at once.\n"
         "- If asked to audit, point out the GENERAL areas where errors might exist.\n"
-        "- Provide hints and guidance rather than direct solutions.\n"
-        "- MAXIMUM LENGTH: 80 words.\n"
+        "- Provide hints and guidance rather than direct solutions, unless strickly asked to.\n"
+        "- MAXIMUM LENGTH: 40 words.\n"
         "- Maintain a professional, slightly critical tone."
         "- Focus on one error/fix at the time"
     )
@@ -88,7 +88,7 @@ def stream_mistral(prompt, client):
     
     full_text = ""
     words_yielded = 0
-    WORDS_PER_SECOND = 6 # Bumped to 6 for better UX (4 can feel like a crawl)
+    WORDS_PER_SECOND = 5 # Bumped to 6 for better UX (4 can feel like a crawl)
     start_time = None
 
     for chunk in response:

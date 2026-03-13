@@ -91,15 +91,6 @@ if agreed:
         # Sync immediately
         st.session_state.warmup_doc = st.session_state.warmup_editor
         
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("🔄 Sync Practice"):
-                if st.session_state.warmup_messages:
-                    st.session_state.warmup_editor = st.session_state.warmup_messages[-1]["content"]
-                    st.rerun()
-        with c2:
-            if st.button("🚨 Practice Stop", type="primary"):
-                st.toast("Practice interrupt captured!")
 
     with col_chat:
         warmup_container = st.container(height=350, border=True)

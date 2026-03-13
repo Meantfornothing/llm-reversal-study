@@ -50,50 +50,47 @@ with st.sidebar:
         if not has_swapped:
             st.success("Target Reached! Ready for the next scenario.")
             if st.button("➡️ Start Next Task", use_container_width=True):
-                # --- NEW: LOG TASK 1 DATA ---
+                # 1. CALCULATE AND SAVE TO BLACK BOX IMMEDIATELY
                 t1_duration = time.time() - st.session_state.task_start_time
                 
-                # We store this in a "Persistent Data" key so it doesn't get cleared with messages
-                if "task_1_data" not in st.session_state:
-                    st.session_state.task_1_data = {
-                        "time": f"{t1_duration:.2f}s",
-                        "interrupts": st.session_state.interrupt_count,
-                        "final_text": st.session_state.main_editor
-                    }
+                # Explicitly update the study_logs dictionary
+                st.session_state.study_logs["task_1"]["time"] = f"{t1_duration:.2f}s"
+                st.session_state.study_logs["task_1"]["text"] = st.session_state.main_editor
+                st.session_state.study_logs["task_1"]["interrupts"] = st.session_state.interrupt_count
+                # (Reasons are already being appended by the 'Confirm' button, so they are safe)
 
-                # 1. Clear chat history for Task 2
+                # 2. UPDATE TASK ID FOR TRACKING
+                st.session_state.current_task_id = "task_2"
+
+                # 3. CLEAR CHAT AND SWAP MODEL
                 st.session_state.messages = [] 
-                
-                # 2. Swap the AI Model
                 current_mode = st.session_state.get("model_mode", "Mistral (Autoregressive)")
                 st.session_state.model_mode = "Mercury 2 (Diffusion)" if "Mistral" in current_mode else "Mistral (Autoregressive)"
                 
-                # 3. Load Scenario 2
+                # 4. LOAD NEW SCENARIO
                 new_text = load_scenario_text(2) 
-                
-                # 4. Update keys for sync logic
                 st.session_state.main_editor = new_text
                 st.session_state.editor_widget = new_text 
                 
                 # 5. RESET TRACKERS FOR TASK 2
                 st.session_state.last_synced_content = new_text 
                 st.session_state.errors_found = 0
-                st.session_state.interrupt_count = 0 # Reset count
-                st.session_state.task_start_time = time.time() # Reset clock
+                st.session_state.interrupt_count = 0 
+                st.session_state.task_start_time = time.time() 
                 
-                # 6. Mark the swap and refresh
+                # 6. REFRESH
                 st.session_state.messages.append({"role": "system", "content": "SWAPPED"})
                 st.rerun()
+
         else:
             st.info("Task 2 Complete!")
             if st.button("🏁 Finish to Survey", type="primary", use_container_width=True):
-                # SAVE TASK 2 TO BLACK BOX
+                # SAVE TASK 2 DATA TO BLACK BOX
                 t2_duration = time.time() - st.session_state.task_start_time
-                st.session_state.study_logs["task_2"] = {
-                    "time": f"{t2_duration:.2f}s",
-                    "interrupts": st.session_state.interrupt_count,
-                    "text": st.session_state.main_editor
-                }
+                st.session_state.study_logs["task_2"]["time"] = f"{t2_duration:.2f}s"
+                st.session_state.study_logs["task_2"]["text"] = st.session_state.main_editor
+                st.session_state.study_logs["task_2"]["interrupts"] = st.session_state.interrupt_count
+                
                 st.switch_page("pages/2_Debrief_Survey.py")
 
 # --- 3. LAYOUT ---
