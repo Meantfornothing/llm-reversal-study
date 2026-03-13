@@ -23,10 +23,20 @@ if "is_running" not in st.session_state:
 if "task_start_time" not in st.session_state:
     st.session_state.task_start_time = time.time()
 
-# Track count per task (we reset this when switching tasks)
+# --- THE BLACK BOX RECORDER ---
+if "study_logs" not in st.session_state:
+    st.session_state.study_logs = {
+        "task_1": {"time": "N/A", "interrupts": 0, "reasons": [], "text": "N/A"},
+        "task_2": {"time": "N/A", "interrupts": 0, "reasons": [], "text": "N/A"}
+    }
+else:
+    # SAFETY: Ensure "reasons" exists in both tasks if the session was already active
+    for task in ["task_1", "task_2"]:
+        if "reasons" not in st.session_state.study_logs[task]:
+            st.session_state.study_logs[task]["reasons"] = []
+
 if "interrupt_count" not in st.session_state:
     st.session_state.interrupt_count = 0
-
 # --- 2. SIDEBAR ---
 with st.sidebar:
     st.header("Task Progress")
@@ -77,13 +87,12 @@ with st.sidebar:
         else:
             st.info("Task 2 Complete!")
             if st.button("🏁 Finish to Survey", type="primary", use_container_width=True):
-                # --- NEW: LOG TASK 2 DATA ---
-                # We save Task 2 here because there is no "Next Task" button after this
+                # SAVE TASK 2 TO BLACK BOX
                 t2_duration = time.time() - st.session_state.task_start_time
-                st.session_state.task_2_data = {
+                st.session_state.study_logs["task_2"] = {
                     "time": f"{t2_duration:.2f}s",
                     "interrupts": st.session_state.interrupt_count,
-                    "final_text": st.session_state.main_editor
+                    "text": st.session_state.main_editor
                 }
                 st.switch_page("pages/2_Debrief_Survey.py")
 
@@ -96,12 +105,14 @@ with col_chat:
     # --- A. SOFT-STOP BUTTON ---
     # This button does NOT stop the loop; it just opens the "Reason" window.
     # This prevents the UI from locking up.
+    # --- A. SOFT-STOP BUTTON ---
     if st.session_state.is_running and not st.session_state.get("show_stop_reason"):
+        # This button just toggles the 'show_stop_reason' state. 
+        # Streamlit will naturally refresh the UI to show the overlay without killing the LLM loop.
         if st.button("🚨 LOG INTERRUPT REASON", use_container_width=True, type="primary"):
             st.session_state.show_stop_reason = True
             st.session_state.temp_elapsed = time.time() - st.session_state.get("start_time", time.time())
-            # We log the interrupt time but let the AI keep running in the UI
-
+        
     # --- B. CHAT HISTORY ---
     chat_container = st.container(height=500, border=True)
     with chat_container:
@@ -111,15 +122,27 @@ with col_chat:
                     st.markdown(msg["content"])
 
     # --- C. THE REASON OVERLAY ---
-    # This appears immediately without waiting for the AI to finish.
     if st.session_state.get("show_stop_reason", False):
         with st.container(border=True):
             st.warning(f"⚠️ Capturing Interrupt at {st.session_state.temp_elapsed:.2f}s")
             reason = st.radio("Why are you interrupting?", ["Found error", "AI is wrong", "Too slow", "Other"], horizontal=True)
-            if st.button("Confirm Log & Resume"):
-                st.session_state.messages.append({"role": "system", "content": f"INTERRUPT: {reason} at {st.session_state.temp_elapsed:.2f}s"})
+            
+            if st.button("Confirm Log & Continue"):
+                # 1. Increment count
+                st.session_state.interrupt_count += 1
+                
+                # 2. Determine Current Task
+                has_swapped = "SWAPPED" in [m['content'] for m in st.session_state.get("messages", []) if m.get('role') == 'system']
+                current_task = "task_2" if has_swapped else "task_1"
+                
+                # 3. SAVE THE REASON to the Black Box list
+                st.session_state.study_logs[current_task]["reasons"].append(reason)
+                st.session_state.study_logs[current_task]["interrupts"] = st.session_state.interrupt_count
+                
+                # 4. UI Feedback
                 st.session_state.show_stop_reason = False
-                st.rerun()
+                st.toast(f"Logged: {reason}", icon="📝")
+                # No st.rerun() so the LLM keeps streaming!
 
     # --- D. CHAT INPUT ---
     if not st.session_state.is_running and not st.session_state.get("show_stop_reason"):

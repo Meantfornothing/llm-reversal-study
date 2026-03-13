@@ -138,13 +138,15 @@ if submit:
     if "No" in consent_final:
         st.error("⚠️ You have withdrawn. No data saved.")
     else:
-        # 1. Calculate NASA-TLX Averages (as you had it)
+        # 1. Calculate NASA-TLX Averages
         ar_tlx = (ar_mental + ar_temp + ar_frust + (11 - ar_perf) + ar_effort) / 5
         dl_tlx = (dllm_mental + dllm_temp + dllm_frust + (11 - dllm_perf) + dllm_effort) / 5
         
-        # 2. Retrieve the Task-Specific Data Dictionaries
-        t1 = st.session_state.get("task_1_data", {})
-        t2 = st.session_state.get("task_2_data", {})
+        # 2. Retrieve the Black Box logs
+        logs = st.session_state.get("study_logs", {
+            "task_1": {"time": "N/A", "interrupts": 0, "reasons": [], "text": "N/A"},
+            "task_2": {"time": "N/A", "interrupts": 0, "reasons": [], "text": "N/A"}
+        })
 
         # 3. CONSTRUCT CONSOLIDATED DATA DICTIONARY
         data = {
@@ -157,15 +159,17 @@ if submit:
             "field_study": st.session_state.get("field_study", "N/A"),
             "ai_familiarity": st.session_state.get("ai_familiarity", "N/A"),
             
-            # --- TASK 1 METRICS ---
-            "t1_total_time": t1.get("time", "N/A"),
-            "t1_interrupts": t1.get("interrupts", 0),
-            "t1_final_text": t1.get("final_text", "N/A"),
+            # --- TASK 1 METRICS (Pulled from Black Box) ---
+            "t1_total_time": logs["task_1"].get("time", "N/A"),
+            "t1_interrupts": logs["task_1"].get("interrupts", 0),
+            "t1_reasons": " | ".join(logs["task_1"].get("reasons", [])), # Joins list into one string
+            "t1_final_text": logs["task_1"].get("text", "N/A"),
             
-            # --- TASK 2 METRICS ---
-            "t2_total_time": t2.get("time", "N/A"),
-            "t2_interrupts": t2.get("interrupts", 0),
-            "t2_final_text": t2.get("final_text", "N/A"),
+            # --- TASK 2 METRICS (Pulled from Black Box) ---
+            "t2_total_time": logs["task_2"].get("time", "N/A"),
+            "t2_interrupts": logs["task_2"].get("interrupts", 0),
+            "t2_reasons": " | ".join(logs["task_2"].get("reasons", [])), # Joins list into one string
+            "t2_final_text": logs["task_2"].get("text", "N/A"),
             
             # --- NASA-TLX & Survey Evaluations ---
             "ar_total_tlx": ar_tlx,
@@ -183,17 +187,11 @@ if submit:
             os.makedirs(output_dir, exist_ok=True)
             csv_path = f"{output_dir}/survey_data.csv"
             
-            # Convert dict to DataFrame
             df = pd.DataFrame([data])
-            
-            # Append to CSV: creates file if missing, adds header only once
             df.to_csv(csv_path, mode='a', header=not os.path.exists(csv_path), index=False)
             
             st.success(f"✅ Full Study Data Logged for Participant {data['p_id']}")
             st.balloons()
-            
-            # OPTIONAL: Clear session state so next participant doesn't see old data
-            # st.session_state.clear()
             
         except Exception as e:
             st.error(f"Data save failed: {e}")
