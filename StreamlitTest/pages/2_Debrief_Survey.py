@@ -138,53 +138,41 @@ if submit:
     if "No" in consent_final:
         st.error("⚠️ You have withdrawn. No data saved.")
     else:
-        # 1. Calculate NASA-TLX Averages
+        # 1. Calculate NASA-TLX Averages (as you had it)
         ar_tlx = (ar_mental + ar_temp + ar_frust + (11 - ar_perf) + ar_effort) / 5
         dl_tlx = (dllm_mental + dllm_temp + dllm_frust + (11 - dllm_perf) + dllm_effort) / 5
         
-        # 2. Extract Performance Metrics (TTFT, Gen Time, etc.)
-        all_messages = st.session_state.get("messages", [])
-        ttfts, gens, reacts, interrupts = [], [], [], []
-
-        for m in all_messages:
-            if m.get('role') == 'system':
-                content = m['content']
-                if "TTFT" in content:
-                    ttfts.append(content.split(":")[-1].replace("s", "").strip())
-                elif "Total_Generation_Time" in content:
-                    gens.append(content.split(":")[-1].replace("s", "").strip())
-                elif "User_Reaction_Latency" in content:
-                    reacts.append(content.split(":")[-1].replace("s", "").strip())
-                else:
-                    interrupts.append(content)
+        # 2. Retrieve the Task-Specific Data Dictionaries
+        t1 = st.session_state.get("task_1_data", {})
+        t2 = st.session_state.get("task_2_data", {})
 
         # 3. CONSTRUCT CONSOLIDATED DATA DICTIONARY
         data = {
-            # Session Info
+            # --- Session & Demographics ---
             "p_id": st.session_state.get("p_id", "N/A"),
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "initial_model": st.session_state.get("initial_model_choice", "N/A"),
-            
-            # --- NEW: DEMOGRAPHICS (From 0_Start_Session) ---
             "age": st.session_state.get("age", "N/A"),
             "gender": st.session_state.get("gender", "N/A"),
             "field_study": st.session_state.get("field_study", "N/A"),
             "ai_familiarity": st.session_state.get("ai_familiarity", "N/A"),
             
-            # Performance Metrics
-            "raw_ttft": " | ".join(ttfts),
-            "raw_gen_times": " | ".join(gens),
-            "raw_reaction_latencies": " | ".join(reacts),
-            "interrupt_logs": " | ".join(interrupts),
+            # --- TASK 1 METRICS ---
+            "t1_total_time": t1.get("time", "N/A"),
+            "t1_interrupts": t1.get("interrupts", 0),
+            "t1_final_text": t1.get("final_text", "N/A"),
             
-            # Survey Evaluations
+            # --- TASK 2 METRICS ---
+            "t2_total_time": t2.get("time", "N/A"),
+            "t2_interrupts": t2.get("interrupts", 0),
+            "t2_final_text": t2.get("final_text", "N/A"),
+            
+            # --- NASA-TLX & Survey Evaluations ---
             "ar_total_tlx": ar_tlx,
             "dl_total_tlx": dl_tlx,
             "pref_choice": preference,
             "agency_choice": agency_score,
             "overall_why": why_text,
-            
-            # Qualitative Notes
             "ar_qual_notes": ar_qual_notes,
             "dl_qual_notes": dl_qual_notes
         }
@@ -195,10 +183,17 @@ if submit:
             os.makedirs(output_dir, exist_ok=True)
             csv_path = f"{output_dir}/survey_data.csv"
             
+            # Convert dict to DataFrame
             df = pd.DataFrame([data])
+            
+            # Append to CSV: creates file if missing, adds header only once
             df.to_csv(csv_path, mode='a', header=not os.path.exists(csv_path), index=False)
             
-            st.success(f"✅ Full Study Data Logged for {data['p_id']}")
+            st.success(f"✅ Full Study Data Logged for Participant {data['p_id']}")
             st.balloons()
+            
+            # OPTIONAL: Clear session state so next participant doesn't see old data
+            # st.session_state.clear()
+            
         except Exception as e:
             st.error(f"Data save failed: {e}")

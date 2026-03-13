@@ -8,43 +8,34 @@ import time
 load_dotenv(os.path.join(os.path.dirname(__file__), '../.env'))
 
 def init_models():
-    """Initializes and returns Mercury and Mistral clients."""
-    # 1. Initialize Mercury 2 (Diffusion)
     mercury_client = OpenAI(
         api_key=os.getenv("MERCURY_API_KEY"),
         base_url="https://api.inceptionlabs.ai/v1"
     )
-    
-    # 2. Initialize Mistral (Autoregressive)
     mistral_client = OpenAI(
         api_key=os.getenv("MISTRAL_API_KEY"),
         base_url="https://api.mistral.ai/v1"
     )
-    
     return mercury_client, mistral_client
 
-# StreamlitTest/utils.py
-
 def get_assistant_response(model_mode, user_query, current_doc, mercury_client, mistral_client):
-    # 1. Flexible but strict instructions
     system_instruction = (
         "ACT AS A TECHNICAL AUDIT ADVISOR. Your goal is to ASSIST the user, not do the work for them.\n"
         "STRICT RESEARCH CONSTRAINTS:\n"
         "- NEVER provide the full corrected document at once.\n"
-        "- If asked to audit, point out the GENERAL areas where errors might exist (e.g., 'Check the units in paragraph 2').\n"
-        "- Provide hints and guidance rather than direct solutions unless the user is truly stuck.\n"
-        "- MAXIMUM LENGTH: 80 words (Keep it short to force user engagement).\n"
+        "- If asked to audit, point out the GENERAL areas where errors might exist.\n"
+        "- Provide hints and guidance rather than direct solutions.\n"
+        "- MAXIMUM LENGTH: 80 words.\n"
         "- Maintain a professional, slightly critical tone."
         "- Focus on one error/fix at the time"
     )
-    # 2. Document Markers (Keep these, they are great for grounding)
+    
     document_block = f"--- DOCUMENT TO AUDIT ---\n{current_doc}\n--- END DOCUMENT ---"
     
-    # 3. Handle History (Good for context)
-    recent_history = st.session_state.messages[-2:] if len(st.session_state.get("messages", [])) > 2 else []
+    # Simple history retrieval
+    recent_history = st.session_state.get("messages", [])[-2:]
     history_str = "\n".join([f"{m['role'].upper()}: {m['content']}" for m in recent_history])
     
-    # 4. Final prompt assembly
     final_prompt = (
         f"{system_instruction}\n"
         f"{document_block}\n\n"
@@ -57,8 +48,6 @@ def get_assistant_response(model_mode, user_query, current_doc, mercury_client, 
         return stream_mistral(final_prompt, mistral_client)
     else:
         return run_mercury_diffusion(final_prompt, mercury_client)
-
-
 # StreamlitTest/utils.py
 
 def run_mercury_diffusion(prompt, client):
