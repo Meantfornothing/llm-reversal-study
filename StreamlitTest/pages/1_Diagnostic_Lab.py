@@ -5,21 +5,24 @@ from utils import run_mercury_diffusion, get_assistant_response, load_scenario_t
 # --- 0. PAGE CONFIG ---
 st.set_page_config(layout="wide", page_title="Study Session", initial_sidebar_state="collapsed")
 
-# --- 1. SESSION STATE ---
-if "doc_content" not in st.session_state:
-    st.session_state.doc_content = ""
-if "last_synced_content" not in st.session_state:
-    st.session_state.last_synced_content = ""
+# --- 1. SESSION STATE INITIALIZATION ---
+# We check for 'main_editor' because it's the direct link to the UI widget
+if "main_editor" not in st.session_state:
+    initial_text = load_scenario_text(1)
+    # The 'truth' for the UI widget
+    st.session_state.main_editor = initial_text 
+    # The background variable for AI/Sync logic
+    st.session_state.doc_content = initial_text 
+    # Used to track if the user has changed anything
+    st.session_state.last_synced_content = initial_text 
+
+# Initialize these if they don't exist yet
 if "errors_found" not in st.session_state:
     st.session_state.errors_found = 0
 if "messages" not in st.session_state:
     st.session_state.messages = []
-
-# --- 2. LOAD TEXT ---
-if st.session_state.doc_content == "":
-    loaded_text = load_scenario_text(1)
-    st.session_state.doc_content = loaded_text
-    st.session_state.last_synced_content = loaded_text
+if "is_running" not in st.session_state:
+    st.session_state.is_running = False
         
 # --- 3. SIDEBAR ---
 with st.sidebar:
@@ -52,7 +55,7 @@ col_chat, col_editor = st.columns([1, 1.2], gap="large")
 
 with col_chat:
     st.subheader("💬 AI Research Assistant")
-    chat_container = st.container(height=500, border=True)
+    chat_container = st.container(height=600, border=True)
     for msg in st.session_state.messages:
         if msg["role"] != "system":
             with chat_container.chat_message(msg["role"]):
@@ -78,12 +81,13 @@ if user_query := st.chat_input("Ask the AI to analyze the document..."):
         st.markdown(user_query)
 
     with chat_container.chat_message("assistant"):
-        # UI Bridge: Show activity while waiting for the first token
-        with st.status("Assistant Analyzing...", expanded=False) as status:
+            # 1. SHOW THE LOADING STATUS (Only for the initial "thinking" phase)
+            status_box = st.status("Assistant Analyzing...", expanded=False)
+            
+            # 2. PLACEHOLDER FOR TEXT (Must be outside the status update for smooth streaming)
             placeholder = st.empty()
             
-            # Call assistant (Ensure utils.py uses mercury_client, mistral_client)
-            response_generator = get_assistant_response(
+            res_gen = get_assistant_response(
                 st.session_state.model_mode, 
                 user_query, 
                 st.session_state.doc_content, 
@@ -94,82 +98,88 @@ if user_query := st.chat_input("Ask the AI to analyze the document..."):
             full_res = ""
             ttft_captured = False
 
-            for update in response_generator:
-                if not st.session_state.get("is_running", True):
-                    break 
+            for update in res_gen:
+                if not st.session_state.get("is_running", True): 
+                    break
                 
                 # --- METRIC: TTFT ---
                 if not ttft_captured:
                     ttft = time.time() - st.session_state.start_time
-                    # Use a specialized key to avoid logging this system message multiple times 
-                    # if the loop runs fast.
                     st.session_state.messages.append({
                         "role": "system", 
                         "content": f"METRIC: TTFT: {ttft:.2f}s"
                     })
-                    status.update(label="Generating Audit...", state="running")
+                    # Update status and collapse it to clear the way for text
+                    status_box.update(label="Generating Audit...", state="running")
                     ttft_captured = True
 
-                # --- DISPLAY LOGIC ---
+                # --- DISPLAY LOGIC (Exactly like your Warmup) ---
                 if "Mistral" in st.session_state.model_mode:
-                    full_res = update # This will now come in word-by-word from utils.py
+                    full_res = update 
                     placeholder.markdown(full_res)
                 else:
-                    # Mercury Logic (Steps)
                     full_res = update["content"]
-                    with placeholder.container():
-                        st.info(f"🧬 Diffusion Refinement: **{update['effort'].upper()}**")
-                        st.markdown(full_res)
+                    # For Mercury, we keep the info box inside the placeholder
+                    placeholder.markdown(f"**Refining:** {update['effort'].upper()}\n\n{full_res}")
             
-            status.update(label="Analysis Complete", state="complete")
-        
-        # --- FINALIZE TURN & LOG METRICS ---
-        # 1. Capture exact end time for the 'Reaction' clock
-        st.session_state.ai_finish_time = time.time() 
-        
-        # 2. Capture Generation Duration
-        gen_duration = st.session_state.ai_finish_time - st.session_state.start_time
-        st.session_state.messages.append({
-            "role": "system", 
-            "content": f"METRIC: Total_Generation_Time: {gen_duration:.2f}s"
-        })
-        
-        # 3. Log content and reset state
-        st.session_state.messages.append({"role": "assistant", "content": full_res})
-        st.session_state.is_running = False
-        
-        # 4. Final Rerun to update chat history UI
-        st.rerun()
+            # 3. FINALIZE UI
+            status_box.update(label="Analysis Complete", state="complete", expanded=False)
+            
+            st.session_state.ai_finish_time = time.time() 
+            gen_duration = st.session_state.ai_finish_time - st.session_state.start_time
+            st.session_state.messages.append({"role": "system", "content": f"METRIC: Gen_Time: {gen_duration:.2f}s"})
+            st.session_state.messages.append({"role": "assistant", "content": full_res})
+            st.session_state.is_running = False
+            st.rerun()
 
 with col_editor:
     st.subheader("📝 Diagnostic Editor")
-    # This now only updates via typing or the manual Sync button
-    st.session_state.doc_content = st.text_area(label="Analyze and fix:", value=st.session_state.doc_content, height=600, key="main_editor")
     
+    # The Editor - Key handles the state, no 'value' needed
+    st.text_area(
+        label="Analyze and fix the report below:",
+        height=600, 
+        key="main_editor"
+    )
+    
+    # Sync internal variable with widget state
+    st.session_state.doc_content = st.session_state.main_editor
+    
+    # Check if they've made any changes
     has_changed = st.session_state.doc_content.strip() != st.session_state.last_synced_content.strip()
 
+    # Action Buttons
     c1, c2 = st.columns(2)
     with c1:
-        # MANUAL SYNC: This is the only way the AI text gets into the editor
-        if st.button("🔄 Sync AI to Editor", use_container_width=True):
-            assistant_msgs = [m for m in st.session_state.messages if m["role"] == "assistant"]
-            if assistant_msgs:
-                new_val = assistant_msgs[-1]["content"]
-                st.session_state.doc_content = new_val
-                st.session_state["main_editor"] = new_val
-                st.rerun()
-
-        if st.button("✅ Log Error", use_container_width=True, disabled=not has_changed, key="btn_fix"):
+        # LOG ERROR: Only active if they've edited something
+        if st.button("✅ Log Error Found", use_container_width=True, disabled=not has_changed, key="btn_fix"):
             st.session_state.errors_found += 1
             st.session_state.last_synced_content = st.session_state.doc_content
-            st.session_state.messages.append({"role": "system", "content": f"PROGRESS: Error {st.session_state.errors_found}"})
+            st.session_state.messages.append({"role": "system", "content": f"PROGRESS: Error {st.session_state.errors_found} logged."})
             st.rerun()
     
     with c2:
-        if st.button("🚨 Log Stop", use_container_width=True, type="primary"):
+        # LOG STOP: Red button for when they get frustrated/stuck
+        if st.button("🚨 Log Diagnostic Stop", use_container_width=True, type="primary"):
             st.session_state.is_running = False 
             st.session_state.temp_elapsed = time.time() - st.session_state.get("start_time", time.time())
             st.session_state.show_stop_reason = True
+            st.rerun()
+
+    # SAFE RESET: Inside an expander to prevent accidental clicks
+    with st.expander("⚠️ Danger Zone"):
+        if st.button("♻️ Reset to Original Scenario Text", use_container_width=True):
+            # Figure out which task we are on based on the 'SWAPPED' system message
+            has_swapped = "SWAPPED" in [m['content'] for m in st.session_state.messages if m.get('role') == 'system']
+            task_num = 2 if has_swapped else 1
+            
+            # Reload original
+            original_text = load_scenario_text(task_num)
+            st.session_state.main_editor = original_text # Update widget key
+            st.session_state.doc_content = original_text
+            st.session_state.last_synced_content = original_text
+            
+            st.toast("Document reset to original state.", icon="♻️")
             st.rerun()
 
 # --- 5. INTERRUPT LOGGING ---

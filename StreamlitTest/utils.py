@@ -26,22 +26,21 @@ def init_models():
 # StreamlitTest/utils.py
 
 def get_assistant_response(model_mode, user_query, current_doc, mercury_client, mistral_client):
-    """
-    Refined prompt with strict structural constraints and word limits.
-    """
-    # 1. High-priority System Instructions
+    # 1. Flexible but strict instructions
     system_instruction = (
-        "ACT AS A TECHNICAL AUDITOR. Your sole task is to analyze the DOCUMENT provided below. "
-        "CONSTRAINTS:\n"
-        "- OUTPUT ONLY the audited text. Do not include introductions, 'Sure!', or explanations.\n"
-        "- MAXIMUM LENGTH: 150 words. Be extremely concise.\n"
-        "- Focus strictly on resolving contradictions or errors in the provided document.\n"
+        "ACT AS A TECHNICAL AUDIT ADVISOR. Your goal is to ASSIST the user, not do the work for them.\n"
+        "STRICT RESEARCH CONSTRAINTS:\n"
+        "- NEVER provide the full corrected document at once.\n"
+        "- If asked to audit, point out the GENERAL areas where errors might exist (e.g., 'Check the units in paragraph 2').\n"
+        "- Provide hints and guidance rather than direct solutions unless the user is truly stuck.\n"
+        "- MAXIMUM LENGTH: 80 words (Keep it short to force user engagement).\n"
+        "- Maintain a professional, slightly critical tone."
+        "- Focus on one error/fix at the time"
     )
-    
-    # 2. Document Markers
+    # 2. Document Markers (Keep these, they are great for grounding)
     document_block = f"--- DOCUMENT TO AUDIT ---\n{current_doc}\n--- END DOCUMENT ---"
     
-    # 3. Handle History as secondary context
+    # 3. Handle History (Good for context)
     recent_history = st.session_state.messages[-2:] if len(st.session_state.get("messages", [])) > 2 else []
     history_str = "\n".join([f"{m['role'].upper()}: {m['content']}" for m in recent_history])
     
@@ -49,16 +48,15 @@ def get_assistant_response(model_mode, user_query, current_doc, mercury_client, 
     final_prompt = (
         f"{system_instruction}\n"
         f"{document_block}\n\n"
-        f"USER QUESTION: {user_query}\n\n"
-        f"CONTEXT (PAST MESSAGES):\n{history_str}\n\n"
-        f"FINAL COMMAND: Provide the audited text now (Max 150 words)."
+        f"USER REQUEST: {user_query}\n\n"
+        f"RECENT CHAT HISTORY:\n{history_str}\n\n"
+        f"ASSISTANT RESPONSE:"
     )
 
     if "Mistral" in model_mode:
         return stream_mistral(final_prompt, mistral_client)
     else:
         return run_mercury_diffusion(final_prompt, mercury_client)
-
 
 
 # StreamlitTest/utils.py
@@ -84,11 +82,15 @@ def run_mercury_diffusion(prompt, client):
         yield {"effort": effort, "content": full_content}
         
         # A tiny sleep so the participant can actually see the "Refining" status change
-        time.sleep(0.8) 
+        time.sleep(1) 
 
 
+
+import time
+import streamlit as st
 
 def stream_mistral(prompt, client):
+    # 1. Immediate API Call
     response = client.chat.completions.create(
         model="mistral-small-latest",
         messages=[{"role": "user", "content": prompt}],
@@ -97,9 +99,8 @@ def stream_mistral(prompt, client):
     
     full_text = ""
     words_yielded = 0
-    WORDS_PER_SECOND = 4
-    # Use a small 'tick' delay to prevent the loop from eating CPU
-    # but keep it fast enough to feel responsive.
+    WORDS_PER_SECOND = 6 # Bumped to 6 for better UX (4 can feel like a crawl)
+    start_time = None
 
     for chunk in response:
         if not st.session_state.get("is_running", True):
@@ -107,22 +108,27 @@ def stream_mistral(prompt, client):
             
         content = chunk.choices[0].delta.content
         if content:
+            if start_time is None:
+                start_time = time.time() # Capture TTFT here
+                
             full_text += content
             current_words = full_text.split()
             
-            # Only trigger the timing logic if a NEW word has actually appeared
+            # If a new word has arrived, show it, THEN wait if we are too fast
             if len(current_words) > words_yielded:
-                # How many new words did we just get?
-                new_words_count = len(current_words) - words_yielded
+                yield full_text # PUSH TO UI IMMEDIATELY
                 
-                # Sleep for the duration of those new words
-                # e.g., if 1 new word, sleep 0.25s.
-                time.sleep(new_words_count / WORDS_PER_SECOND)
+                # Math: How long should it take to show this many words?
+                target_time = len(current_words) / WORDS_PER_SECOND
+                actual_elapsed = time.time() - start_time
+                
+                delay = target_time - actual_elapsed
+                if delay > 0:
+                    time.sleep(delay)
                 
                 words_yielded = len(current_words)
-                yield full_text
-    
-    # Final yield to make sure any trailing punctuation/characters are shown
+
+    # Final safety yield
     yield full_text
 
 def load_scenario_text(task_num):
